@@ -43,7 +43,7 @@ public sealed class FileDeliveryAuditTests
         var activity = await PollActivityAsync(client, path);
         var activityDetail = await AuditTestHelper.GetByIdAsync(client, activity.Id);
         activityDetail.ShouldNotBeNull();
-        activityDetail!.Payload.GetProperty("responsePreview").ValueKind.ShouldBe(JsonValueKind.Null);
+        AssertNoResponsePreview(activityDetail!);
         activityDetail.Payload.GetRawText().ShouldNotContain("X-Amz-Signature");
         activityDetail.Payload.GetRawText().ShouldNotContain(download.Url.ToString());
     }
@@ -70,7 +70,7 @@ public sealed class FileDeliveryAuditTests
         var activity = await PollActivityAsync(client, path);
         var detail = await AuditTestHelper.GetByIdAsync(client, activity.Id);
         detail.ShouldNotBeNull();
-        detail!.Payload.GetProperty("responsePreview").ValueKind.ShouldBe(JsonValueKind.Null);
+        AssertNoResponsePreview(detail!);
         detail.Payload.GetRawText().ShouldNotContain("X-Amz-Signature");
         detail.Payload.GetRawText().ShouldNotContain(upload.UploadUrl.ToString());
     }
@@ -100,6 +100,14 @@ public sealed class FileDeliveryAuditTests
         detail.Payload.GetRawText().ShouldNotContain("X-Amz-Signature");
     }
 
+
+    private static void AssertNoResponsePreview(AuditDetailDto detail)
+    {
+        if (detail.Payload.TryGetProperty("responsePreview", out var preview))
+        {
+            preview.ValueKind.ShouldBe(JsonValueKind.Null);
+        }
+    }
     private static async Task<AuditSummaryDto> PollSecurityAsync(
         HttpClient client, SecurityAction action)
     {
