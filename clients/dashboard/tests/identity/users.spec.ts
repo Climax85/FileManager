@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { mockJsonResponse } from "../helpers/api-mocks";
+import { captureRequest, mockJsonResponse, mockProblemDetails } from "../helpers/api-mocks";
 import { seedAuthedSession, TEST_USER } from "../helpers/auth-seed";
 import { installShellMocks, paged } from "../helpers/shell-mocks";
 
@@ -153,5 +153,50 @@ test.describe("identity/users/:userId — detail", () => {
     await expect(page.getByText("bob@acme.com").first()).toBeVisible();
     // @username subtitle is shown in the hero.
     await expect(page.getByText("@bob").first()).toBeVisible();
+  });
+
+  test("saves an administrator change and reports success", async ({ page }) => {
+    const sent = captureRequest(page, `**/api/v1/identity/users/${USER_ID}/roles`);
+    await page.goto(`/identity/users/${USER_ID}`);
+
+    await page.getByLabel("Toggle Admin").click();
+    await page.getByRole("button", { name: /save changes/i }).click();
+
+    const request = await sent.value();
+    expect(request.body).toMatchObject({
+      userId: USER_ID,
+      userRoles: expect.arrayContaining([
+        expect.objectContaining({ roleName: "Admin", enabled: false }),
+      ]),
+    });
+    await expect(page.getByText(/roles updated/i)).toBeVisible();
+  });
+
+  test("surfaces the server MFA denial for an administrator change", async ({ page }) => {
+    await mockProblemDetails(page, `**/api/v1/identity/users/${USER_ID}/roles`, 403, {
+      title: "Forbidden",
+      detail: "Multi-factor authentication is required to change organization administrators.",
+    });
+    await page.goto(`/identity/users/${USER_ID}`);
+
+    await page.getByLabel("Toggle Admin").click();
+    await page.getByRole("button", { name: /save changes/i }).click();
+
+    await expect(page.getByText(/update failed/i)).toBeVisible();
+    await expect(page.getByText(/multi-factor authentication is required/i)).toBeVisible();
+  });
+
+  test("surfaces the server last-administrator denial", async ({ page }) => {
+    await mockProblemDetails(page, `**/api/v1/identity/users/${USER_ID}/roles`, 400, {
+      title: "Administrator change rejected",
+      detail: "Organization must retain at least one administrator.",
+    });
+    await page.goto(`/identity/users/${USER_ID}`);
+
+    await page.getByLabel("Toggle Admin").click();
+    await page.getByRole("button", { name: /save changes/i }).click();
+
+    await expect(page.getByText(/update failed/i)).toBeVisible();
+    await expect(page.getByText(/at least one administrator/i)).toBeVisible();
   });
 });
