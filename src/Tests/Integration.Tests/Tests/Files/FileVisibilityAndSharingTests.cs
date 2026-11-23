@@ -111,25 +111,23 @@ public sealed class FileVisibilityAndSharingTests
         var dto = await response.DeserializeAsync<FileAssetDto>();
         dto.Id.ShouldBe(fileId);
         dto.Visibility.ShouldBe(Visibility.Public);
+        dto.PublicUrl.ShouldBeNull();
     }
 
     [Fact]
-    public async Task GetDownloadUrl_Should_Succeed_For_NonOwner_When_File_Is_Public()
+    public async Task GetDownloadUrl_Should_Return404_For_NonOwner_When_File_Is_Public()
     {
-        // Arrange
+        // Arrange — Public visibility affects metadata discovery, not download authorization.
         using var ownerClient = await _auth.CreateRootAdminClientAsync();
         var fileId = await UploadAndFinalizeAsync(ownerClient, "public-dl.pdf", "application/pdf", 256, visibility: 0);
 
         using var granteeClient = await RegisterAndLoginAsync("public-dl-reader");
 
-        // Act — non-owner mints a presigned GET for the Public file.
+        // Act — non-owner attempts to mint a presigned GET for the Public file.
         using var response = await granteeClient.GetAsync($"{FilesBasePath}/{fileId}/url");
 
-        // Assert — Public read is allowed; a real presigned URL comes back.
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var download = await response.DeserializeAsync<PresignedDownloadResponse>();
-        download.Url.ShouldNotBeNull();
-        download.Url.AbsoluteUri.ShouldContain("X-Amz-Signature");
+        // Assert — visibility never substitutes for resource download authorization.
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Fact]

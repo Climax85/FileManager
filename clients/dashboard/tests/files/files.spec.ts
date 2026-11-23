@@ -47,6 +47,21 @@ const FILE_SHARED = {
   createdByUserId: "u-other-1",
 };
 
+const FILE_PUBLIC_OWNED_IMAGE = {
+  id: "00000000-0000-0000-0000-0000000f3333",
+  ownerType: "MyFiles",
+  ownerId: null,
+  originalFileName: "private-preview.png",
+  contentType: "image/png",
+  sizeBytes: 128_000,
+  visibility: "Public",
+  status: "Available",
+  scanStatus: 1,
+  createdAtUtc: "2026-05-12T10:00:00Z",
+  publicUrl: "https://public-bypass.example.test/private-preview.png",
+  createdByUserId: TEST_USER.sub,
+};
+
 // ─── Shared beforeEach ──────────────────────────────────────────────────
 
 test.beforeEach(async ({ page }) => {
@@ -135,5 +150,53 @@ test.describe("files — My files / Shared tabs", () => {
     await expect(
       page.getByText(/when a teammate flips one of their files to public/i),
     ).toBeVisible();
+  });
+});
+
+
+// ─── Authorized private delivery ───────────────────────────────────────
+
+test.describe("files — authorized delivery", () => {
+  test("public visibility never bypasses the signed preview URL", async ({ page }) => {
+    const signedUrl = "https://minio.example.test/private-preview.png?X-Amz-Signature=secret";
+    let signedUrlRequests = 0;
+    await mockJsonResponse(page, "**/api/v1/files/mine**", [FILE_PUBLIC_OWNED_IMAGE]);
+    await mockJsonResponse(
+      page,
+      `**/api/v1/files/${FILE_PUBLIC_OWNED_IMAGE.id}`,
+      FILE_PUBLIC_OWNED_IMAGE,
+    );
+    await page.route(`**/api/v1/files/${FILE_PUBLIC_OWNED_IMAGE.id}/url?inline=true`, async (route) => {
+      signedUrlRequests += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ url: signedUrl, expiresAt: "2026-05-12T10:05:00Z" }),
+      });
+    });
+
+    await page.goto("/files");
+    await page.getByText("private-preview.png").last().click();
+
+    const preview = page.getByRole("img", { name: "private-preview.png" });
+    await expect(preview).toHaveAttribute("src", signedUrl);
+    expect(signedUrlRequests).toBeGreaterThan(0);
+  });
+
+  test("shows a visible error when authorized delivery is denied", async ({ page }) => {
+    await mockJsonResponse(page, "**/api/v1/files/mine**", [FILE_REPORT]);
+    await mockJsonResponse(page, `**/api/v1/files/${FILE_REPORT.id}`, FILE_REPORT);
+    await mockJsonResponse(
+      page,
+      `**/api/v1/files/${FILE_REPORT.id}/url?inline=true`,
+      { title: "Not Found", detail: "file not found", status: 404 },
+      { status: 404 },
+    );
+
+    await page.goto("/files");
+    await page.getByText("quarterly-report.pdf").last().click();
+
+    await expect(page.getByText(/authorized preview is unavailable/i)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Download" })).toHaveCount(0);
   });
 });
