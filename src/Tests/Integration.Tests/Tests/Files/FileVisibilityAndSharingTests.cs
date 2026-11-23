@@ -18,8 +18,8 @@ namespace Integration.Tests.Tests.Files;
 /// <list type="bullet">
 ///   <item>Private (visibility=1): readable only by the uploader. A non-owner in the same tenant
 ///   gets 404 on both GET metadata and GET /url (existence is not leaked).</item>
-///   <item>Public (visibility=0): readable by anyone in the tenant. A non-owner can read metadata,
-///   mint a download URL, and see the file in the tenant-wide <c>/shared</c> list.</item>
+///   <item>Public (visibility=0): readable metadata for anyone in the tenant and included in
+///   /shared, but durable URLs are omitted and non-owners cannot mint download URLs.</item>
 ///   <item>Flipping the bit (<c>PATCH /{id}/visibility</c>) is uploader-only — a non-owner gets 403.</item>
 /// </list>
 /// Tests use two users in the SAME tenant (owner = root admin, grantee = a freshly registered user)
@@ -146,6 +146,7 @@ public sealed class FileVisibilityAndSharingTests
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         var list = await response.DeserializeAsync<IReadOnlyList<FileAssetDto>>();
         list.ShouldContain(f => f.Id == fileId);
+        list.Single(f => f.Id == fileId).PublicUrl.ShouldBeNull();
     }
 
     [Fact]

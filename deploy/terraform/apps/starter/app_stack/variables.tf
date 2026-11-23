@@ -198,6 +198,11 @@ variable "app_s3_enable_public_read" {
   type        = bool
   description = "Whether to enable public read on uploads prefix."
   default     = false
+
+  validation {
+    condition     = !var.app_s3_enable_public_read
+    error_message = "The File Manager upload bucket must remain private; use authorized presigned URLs."
+  }
 }
 
 variable "app_s3_public_read_prefix" {
@@ -208,8 +213,13 @@ variable "app_s3_public_read_prefix" {
 
 variable "app_s3_enable_cloudfront" {
   type        = bool
-  description = "Whether to provision a CloudFront distribution for the app bucket."
-  default     = true
+  description = "Whether to provision CloudFront for the app bucket. Private File Manager buckets must leave this disabled."
+  default     = false
+
+  validation {
+    condition     = !var.app_s3_enable_cloudfront
+    error_message = "Unsigned CloudFront delivery is not allowed for the private File Manager upload bucket."
+  }
 }
 
 variable "app_s3_cloudfront_price_class" {

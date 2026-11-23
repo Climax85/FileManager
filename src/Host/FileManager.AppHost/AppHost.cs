@@ -62,14 +62,20 @@ var minio = builder.AddContainer("minio", "minio/minio")
     .WithVolume($"{appPrefix}-minio-data", "/data")
     .WithLifetime(ContainerLifetime.Persistent);
 
-// Init container: bucket bootstrap (create + public-read). Script normalized to LF so /bin/sh in minio/mc doesn't choke on Windows CRLF.
+// Real ClamAV scanner. Files scans fail closed when this service is unavailable or not ready.
+var clamAv = builder.AddContainer("clamav", "clamav/clamav", "stable")
+    .WithEndpoint(targetPort: 3310, scheme: "tcp", name: "tcp")
+    .WithVolume($"{appPrefix}-clamav-data", "/var/lib/clamav")
+    .WithLifetime(ContainerLifetime.Persistent);
+
+// Init container: private bucket bootstrap. Downloads always use short-lived SigV4 URLs.
 var minioInitScript = ($$"""
 until mc alias set local http://minio:9000 "$MC_USER" "$MC_PASS"; do
   echo "waiting for minio...";
   sleep 2;
 done;
 mc mb --ignore-existing local/{{MinioBucket}};
-mc anonymous set download local/{{MinioBucket}};
+mc anonymous set none local/{{MinioBucket}};
 """).ReplaceLineEndings("\n");
 
 var minioInit = builder.AddContainer("minio-init", "minio/mc")
@@ -111,6 +117,7 @@ var api = builder.AddProject<Projects.FileManager_Api>($"{appPrefix}-api")
     .WaitForCompletion(minioInit)
     .WaitForCompletion(migrator)
     .WaitForCompletion(demoSeeder)
+    .WaitFor(clamAv)
     .WithExternalHttpEndpoints()
     .WithEnvironment("DatabaseOptions__Provider", "POSTGRESQL")
     .WithEnvironment("DatabaseOptions__ConnectionString", apiPgConnection)
@@ -135,7 +142,9 @@ var api = builder.AddProject<Projects.FileManager_Api>($"{appPrefix}-api")
     .WithEnvironment("Storage__S3__AccessKey", minioUser)
     .WithEnvironment("Storage__S3__SecretKey", minioPassword)
     .WithEnvironment("Storage__S3__ForcePathStyle", "true")
-    .WithEnvironment("Storage__S3__PublicBaseUrl", ReferenceExpression.Create($"{minioApiEndpoint}/{MinioBucket}"));
+    .WithEnvironment("Storage__S3__PublicRead", "false")
+    .WithEnvironment("Files__Scanner__Host", "clamav")
+    .WithEnvironment("Files__Scanner__Port", "3310");
 
 // Admin console (React + Vite). Target the API's HTTPS endpoint directly — UseHttpsRedirection's 307 to https is cross-origin and strips the Authorization header.
 builder.AddJavaScriptApp($"{appPrefix}-admin", "../../../clients/admin", "dev")

@@ -1,3 +1,5 @@
+using FSH.Modules.Auditing.Contracts;
+
 using FSH.Framework.Shared.Identity.Authorization;
 using FSH.Framework.Web.Idempotency;
 using FSH.Modules.Files.Contracts.Authorization;
@@ -18,5 +20,11 @@ public static class RequestUploadUrlEndpoint
             .WithName("RequestFileUploadUrl")
             .WithSummary("Mint a presigned PUT URL for a file upload")
             .RequirePermission(FilesPermissions.Upload)
-            .WithIdempotency();
+            .AddEndpointFilter(async (context, next) =>
+            {
+                context.HttpContext.Response.Headers.CacheControl = "no-store";
+                return await next(context);
+            })
+            .WithIdempotency()
+            .NoAuditBody();
 }

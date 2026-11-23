@@ -1,6 +1,5 @@
 using FSH.Framework.Core.Context;
 using FSH.Framework.Core.Exceptions;
-using FSH.Framework.Storage.Services;
 using FSH.Modules.Files.Contracts;
 using FSH.Modules.Files.Contracts.v1.Commands;
 using FSH.Modules.Files.Contracts.v1.DTOs;
@@ -16,8 +15,7 @@ namespace FSH.Modules.Files.Features.v1.ChangeVisibility;
 public sealed class ChangeFileVisibilityCommandHandler(
     FilesDbContext db,
     FileAccessPolicyRegistry policies,
-    ICurrentUser currentUser,
-    IStorageService storage)
+    ICurrentUser currentUser)
     : ICommandHandler<ChangeFileVisibilityCommand, FileAssetDto>
 {
     public async ValueTask<FileAssetDto> Handle(ChangeFileVisibilityCommand cmd, CancellationToken cancellationToken)
@@ -49,9 +47,6 @@ public sealed class ChangeFileVisibilityCommandHandler(
         f.ChangeVisibility(cmd.Visibility);
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        var publicUrl = f.Visibility == Visibility.Public
-            ? storage.BuildPublicUrl(f.StorageKey)
-            : null;
-        return FileAssetMapper.ToDto(f, publicUrl);
+        return FileAssetMapper.ToDto(f);
     }
 }

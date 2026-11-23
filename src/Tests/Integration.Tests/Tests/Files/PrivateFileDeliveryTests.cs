@@ -1,17 +1,17 @@
+using System.Globalization;
+using System.Net.Sockets;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
+
 using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
-using Finbuckle.MultiTenant;
-using Finbuckle.MultiTenant.Abstractions;
-using FSH.Framework.Shared.Multitenancy;
 using FSH.Modules.Files.Contracts.v1.DTOs;
-using FSH.Modules.Files.Data;
 using FSH.Modules.Files.Domain;
 using Integration.Tests.Infrastructure;
 using Integration.Tests.Infrastructure.Extensions;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.WebUtilities;
 
 namespace Integration.Tests.Tests.Files;
 
@@ -45,6 +45,9 @@ public sealed class PrivateFileDeliveryTests
         download.Url.Query.ShouldContain("X-Amz-Signature=");
         download.ExpiresAt.ShouldBeGreaterThan(before);
         download.ExpiresAt.ShouldBeLessThanOrEqualTo(DateTimeOffset.UtcNow.AddMinutes(5).AddSeconds(5));
+        long.Parse(
+            QueryHelpers.ParseQuery(download.Url.Query)["X-Amz-Expires"].ToString(),
+            CultureInfo.InvariantCulture).ShouldBeLessThanOrEqualTo(300);
     }
 
     [Fact]
@@ -57,6 +60,50 @@ public sealed class PrivateFileDeliveryTests
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         response.Headers.CacheControl.ShouldNotBeNull();
         response.Headers.CacheControl!.NoStore.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task UploadUrl_Should_ReturnNoStoreOnIdempotentReplay()
+    {
+        using var client = await _auth.CreateRootAdminClientAsync();
+        string key = Guid.NewGuid().ToString("N");
+        using var first = new HttpRequestMessage(HttpMethod.Post, $"{FilesBasePath}/upload-url")
+        {
+            Content = JsonContent.Create(new
+            {
+                ownerType = "MyFiles",
+                ownerId = (Guid?)null,
+                fileName = "idempotent-upload.pdf",
+                contentType = "application/pdf",
+                sizeBytes = 256,
+                visibility = 1,
+                category = "Document"
+            })
+        };
+        first.Headers.Add("Idempotency-Key", key);
+        using var firstResponse = await client.SendAsync(first);
+        firstResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        using var replay = new HttpRequestMessage(HttpMethod.Post, $"{FilesBasePath}/upload-url")
+        {
+            Content = JsonContent.Create(new
+            {
+                ownerType = "MyFiles",
+                ownerId = (Guid?)null,
+                fileName = "idempotent-upload.pdf",
+                contentType = "application/pdf",
+                sizeBytes = 256,
+                visibility = 1,
+                category = "Document"
+            })
+        };
+        replay.Headers.Add("Idempotency-Key", key);
+        using var response = await client.SendAsync(replay);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        response.Headers.CacheControl.ShouldNotBeNull();
+        response.Headers.CacheControl!.NoStore.ShouldBeTrue();
+        response.Headers.GetValues("Idempotency-Replayed").ShouldContain("true");
     }
 
     [Fact]
@@ -74,6 +121,17 @@ public sealed class PrivateFileDeliveryTests
         response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
     }
 
+
+    [Fact]
+    public async Task DownloadUrl_Should_Return401_ForAnonymousApiRequest()
+    {
+        using var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Add("tenant", TestConstants.RootTenantId);
+
+        using var response = await client.GetAsync($"{FilesBasePath}/{Guid.NewGuid()}/url");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
     [Fact]
     public async Task DownloadUrl_Should_Return404_WhenUploadIsStillPending()
     {
@@ -115,27 +173,34 @@ public sealed class PrivateFileDeliveryTests
     }
 
     [Fact]
-    public async Task DownloadUrl_Should_Return404_WhenLastScanFailed()
+    public async Task Finalize_Should_QuarantineAndDenyDownload_WhenScannerIsUnavailable()
     {
-        using var client = await _auth.CreateRootAdminClientAsync();
-        var id = await UploadAndFinalizeAsync(client, "scan-failed.pdf", RandomBytes(256));
-        await SetScanStatusAsync(id, ScanStatus.ScanFailed);
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        int unusedPort = ((IPEndPoint)listener.LocalEndpoint).Port;
+        listener.Stop();
+        using var unavailableFactory = _factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
+                new Dictionary<string, string?>
+                {
+                    ["Files:Scanner:Host"] = "127.0.0.1",
+                    ["Files:Scanner:Port"] = unusedPort.ToString(CultureInfo.InvariantCulture),
+                    ["Files:Scanner:TimeoutMilliseconds"] = "100"
+                }));
+        });
+        var token = await _auth.GetRootAdminTokenAsync();
+        using var client = unavailableFactory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.AccessToken);
+        client.DefaultRequestHeaders.Add("tenant", TestConstants.RootTenantId);
+
+        var (id, dto) = await UploadAndFinalizeWithResultAsync(client, "scanner-outage.pdf", RandomBytes(256));
+        dto.Status.ShouldBe(FileAssetStatus.Quarantined);
+        dto.ScanStatus.ShouldBe((int)ScanStatus.ScanFailed);
 
         using var response = await client.GetAsync($"{FilesBasePath}/{id}/url");
 
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
-    }
-
-    private async Task SetScanStatusAsync(Guid id, ScanStatus status)
-    {
-        using var scope = _factory.Services.CreateScope();
-        var tenant = await scope.ServiceProvider.GetRequiredService<IMultiTenantStore<AppTenantInfo>>()
-            .GetAsync(TestConstants.RootTenantId);
-        scope.ServiceProvider.GetRequiredService<IMultiTenantContextSetter>().MultiTenantContext =
-            new MultiTenantContext<AppTenantInfo>(tenant);
-        var db = scope.ServiceProvider.GetRequiredService<FilesDbContext>();
-        await db.FileAssets.Where(f => f.Id == id)
-            .ExecuteUpdateAsync(s => s.SetProperty(f => f.ScanStatus, status));
     }
 
     private static Task<HttpResponseMessage> RequestUploadAsync(

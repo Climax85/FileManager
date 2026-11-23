@@ -39,6 +39,7 @@ public sealed class FileDeliveryAuditTests
         securityDetail!.Payload.GetProperty("action").GetString().ShouldBe(nameof(SecurityAction.FileDownloadIssued));
         securityDetail.Payload.GetRawText().ShouldNotContain(download.Url.ToString());
 
+        securityDetail.Payload.GetRawText().ShouldNotContain("X-Amz-Signature");
         var activity = await PollActivityAsync(client, path);
         var activityDetail = await AuditTestHelper.GetByIdAsync(client, activity.Id);
         activityDetail.ShouldNotBeNull();
@@ -47,6 +48,32 @@ public sealed class FileDeliveryAuditTests
         activityDetail.Payload.GetRawText().ShouldNotContain(download.Url.ToString());
     }
 
+
+    [Fact]
+    public async Task UploadUrl_Should_SuppressSignedResponseBodyFromHttpAudit()
+    {
+        using var client = await _auth.CreateRootAdminClientAsync();
+        const string path = FilesBasePath + "/upload-url";
+        using var response = await client.PostAsJsonAsync(path, new
+        {
+            ownerType = "MyFiles",
+            ownerId = (Guid?)null,
+            fileName = "audit-upload.pdf",
+            contentType = "application/pdf",
+            sizeBytes = 256,
+            visibility = 1,
+            category = "Document"
+        });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var upload = await response.DeserializeAsync<PresignedUploadResponse>();
+
+        var activity = await PollActivityAsync(client, path);
+        var detail = await AuditTestHelper.GetByIdAsync(client, activity.Id);
+        detail.ShouldNotBeNull();
+        detail!.Payload.GetProperty("responsePreview").ValueKind.ShouldBe(JsonValueKind.Null);
+        detail.Payload.GetRawText().ShouldNotContain("X-Amz-Signature");
+        detail.Payload.GetRawText().ShouldNotContain(upload.UploadUrl.ToString());
+    }
     [Fact]
     public async Task DeniedDownload_Should_WriteExplicitSecurityAudit_WithoutUrl()
     {

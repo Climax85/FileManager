@@ -51,7 +51,7 @@ public sealed class FilesModule : IModule
         builder.Services.AddScoped<IDbInitializer, FilesDbInitializer>();
 
         builder.Services.AddScoped<FileAccessPolicyRegistry>();
-        builder.Services.AddSingleton<IFileScanner, NoOpFileScanner>();
+        builder.Services.AddScoped<IFileScanner, ClamAvFileScanner>();
         builder.Services.AddValidatorsFromAssembly(typeof(FilesModule).Assembly);
 
         // Default uploader-only policies for the built-in OwnerTypes. Owning modules register their

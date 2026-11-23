@@ -174,6 +174,16 @@ test.describe("files — authorized delivery", () => {
         body: JSON.stringify({ url: signedUrl, expiresAt: "2026-05-12T10:05:00Z" }),
       });
     });
+    await page.route(signedUrl, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "image/png",
+        body: Buffer.from(
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+          "base64",
+        ),
+      });
+    });
 
     await page.goto("/files");
     await page.getByText("private-preview.png").last().click();

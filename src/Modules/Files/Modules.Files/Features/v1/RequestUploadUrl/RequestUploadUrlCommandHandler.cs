@@ -81,7 +81,7 @@ public sealed class RequestUploadUrlCommandHandler(
         var id = Guid.CreateVersion7();
         var storageKey = StorageKeyBuilder.Build(tenantId, cmd.OwnerType, id, cmd.FileName, DateTimeOffset.UtcNow);
         var ttl = TimeSpan.FromMinutes(options.Value.UploadUrlTtlMinutes);
-        var presigned = await storage.GenerateUploadUrlAsync(storageKey, cmd.ContentType, category.MaxBytes, ttl, cancellationToken).ConfigureAwait(false);
+        var presigned = await storage.GenerateUploadUrlAsync(storageKey, cmd.ContentType, cmd.SizeBytes, ttl, cancellationToken).ConfigureAwait(false);
 
         var asset = FileAsset.CreatePending(
             id: id,
