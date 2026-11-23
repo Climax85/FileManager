@@ -13,6 +13,7 @@
 	<ItemGroup>
 	  <ProjectReference Include="..\..\..\BuildingBlocks\Eventing.Abstractions\Eventing.Abstractions.csproj" />
 	  <ProjectReference Include="..\..\..\BuildingBlocks\Shared\Shared.csproj" />
+	  <ProjectReference Include="..\..\Authorization\Modules.Authorization.Contracts\Modules.Authorization.Contracts.csproj" />
 	</ItemGroup>
 
 </Project>

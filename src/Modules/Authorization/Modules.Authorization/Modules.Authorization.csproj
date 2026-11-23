@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>FSH.Modules.Authorization</RootNamespace>
+    <AssemblyName>FSH.Modules.Authorization</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\BuildingBlocks\Persistence\Persistence.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Web\Web.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Eventing\Eventing.csproj" />
+    <ProjectReference Include="..\Modules.Authorization.Contracts\Modules.Authorization.Contracts.csproj" />
+    <ProjectReference Include="..\..\Identity\Modules.Identity.Contracts\Modules.Identity.Contracts.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Authzed.Net" />
+    <PackageReference Include="Grpc.Net.Client" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Schema\v1\schema.zed" />
+    <None Update="Schema\v1\assertions.yaml" />
+  </ItemGroup>
+</Project>

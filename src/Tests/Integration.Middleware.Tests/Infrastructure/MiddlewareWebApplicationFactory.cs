@@ -23,6 +23,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Testcontainers.Minio;
+using DotNet.Testcontainers.Builders;
+using DotNet.Testcontainers.Containers;
 using Testcontainers.PostgreSql;
 
 namespace Integration.Middleware.Tests.Infrastructure;
@@ -45,6 +47,7 @@ public sealed class MiddlewareWebApplicationFactory : WebApplicationFactory<Prog
     private const string MinioAccessKey = "minioadmin";
     private const string MinioSecretKey = "minioadmin";
     private const string MinioBucket = "fsh-middleware-test-uploads";
+    private const string SpiceDbKey = "middleware-test-spicedb-key";
 
     private static readonly SemaphoreSlim _migrationLock = new(1, 1);
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17-alpine")
@@ -58,6 +61,14 @@ public sealed class MiddlewareWebApplicationFactory : WebApplicationFactory<Prog
     private readonly MinioContainer _minio = new MinioBuilder("minio/minio:latest")
         .WithUsername(MinioAccessKey)
         .WithPassword(MinioSecretKey)
+        .WithAutoRemove(true)
+        .WithCleanUp(true)
+        .Build();
+    private readonly IContainer _spiceDb = new ContainerBuilder()
+        .WithImage("authzed/spicedb:v1.57.1")
+        .WithPortBinding(50051, true)
+        .WithCommand("serve-testing", "--grpc-preshared-key", SpiceDbKey)
+        .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(50051))
         .WithAutoRemove(true)
         .WithCleanUp(true)
         .Build();
@@ -78,7 +89,7 @@ public sealed class MiddlewareWebApplicationFactory : WebApplicationFactory<Prog
 
     public async Task InitializeAsync()
     {
-        await Task.WhenAll(_postgres.StartAsync(), _minio.StartAsync());
+        await Task.WhenAll(_postgres.StartAsync(), _minio.StartAsync(), _spiceDb.StartAsync());
         await CreateMinioBucketAsync();
 
         // Force host creation via the Server property (no leaked HttpClient)
@@ -102,6 +113,7 @@ public sealed class MiddlewareWebApplicationFactory : WebApplicationFactory<Prog
         await base.DisposeAsync();
         await _postgres.DisposeAsync();
         await _minio.DisposeAsync();
+        await _spiceDb.DisposeAsync();
     }
 
     /// <summary>The MinIO endpoint URL exposed to the host configuration; useful for tests that need to PUT bytes directly.</summary>
@@ -188,6 +200,9 @@ public sealed class MiddlewareWebApplicationFactory : WebApplicationFactory<Prog
                 ["Storage:S3:ForcePathStyle"] = "true",
                 ["Storage:S3:PublicRead"] = "false",
                 ["Storage:S3:Region"] = "us-east-1",
+                ["Authorization:SpiceDB:Endpoint"] = $"http://{_spiceDb.Hostname}:{_spiceDb.GetMappedPublicPort(50051)}",
+                ["Authorization:SpiceDB:PresharedKey"] = SpiceDbKey,
+                ["Authorization:SpiceDB:UseTls"] = "false",
             });
         });
 
