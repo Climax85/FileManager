@@ -1,15 +1,24 @@
+using Finbuckle.MultiTenant;
+using Finbuckle.MultiTenant.Abstractions;
+using FSH.Framework.Shared.Constants;
+using FSH.Framework.Shared.Multitenancy;
+using FSH.Modules.Identity.Domain;
 using Integration.Tests.Infrastructure;
 using Integration.Tests.Infrastructure.Extensions;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Integration.Tests.Tests.Users;
 
 [Collection(FshCollectionDefinition.Name)]
 public sealed class UserManagementGuardTests
 {
+    private readonly FshWebApplicationFactory _factory;
     private readonly AuthHelper _auth;
 
     public UserManagementGuardTests(FshWebApplicationFactory factory)
     {
+        _factory = factory;
         _auth = new AuthHelper(factory);
     }
 
@@ -43,20 +52,9 @@ public sealed class UserManagementGuardTests
         registerResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
         var registered = await registerResponse.DeserializeAsync<RegisterResult>();
 
-        // Promote the new user to Admin
-        var (adminRole, basicRole) = await GetSystemRolesAsync(client);
-        var assignResponse = await client.PostAsJsonAsync(
-            $"{TestConstants.IdentityBasePath}/users/{registered.UserId}/roles",
-            new
-            {
-                userId = registered.UserId,
-                userRoles = new[]
-                {
-                    new { roleId = adminRole.Id, roleName = "Admin", enabled = true },
-                    new { roleId = basicRole.Id, roleName = "Basic", enabled = true }
-                }
-            });
-        assignResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        // Seed the target's administrator membership directly: this test exercises the
+        // delete guard, not the separately covered MFA-gated administrator assignment API.
+        await AssignAdminRoleDirectlyAsync(registered.UserId);
 
         // Root admin tries to delete the second admin → must be rejected.
         var deleteResponse = await client.DeleteAsync($"{TestConstants.IdentityBasePath}/users/{registered.UserId}");
@@ -64,7 +62,7 @@ public sealed class UserManagementGuardTests
     }
 
     [Fact]
-    public async Task AssignUserRoles_Should_ReturnBadRequest_When_RemovingOwnAdminRole()
+    public async Task AssignUserRoles_Should_ReturnForbidden_When_AdministratorChangeLacksMfa()
     {
         using var client = await _auth.CreateRootAdminClientAsync();
         var profile = await GetCurrentProfileAsync(client);
@@ -81,7 +79,21 @@ public sealed class UserManagementGuardTests
                 }
             });
 
-        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    private async Task AssignAdminRoleDirectlyAsync(string userId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var tenant = await scope.ServiceProvider
+            .GetRequiredService<IMultiTenantStore<AppTenantInfo>>()
+            .GetAsync(TestConstants.RootTenantId);
+        scope.ServiceProvider.GetRequiredService<IMultiTenantContextSetter>()
+            .MultiTenantContext = new MultiTenantContext<AppTenantInfo>(tenant);
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<FshUser>>();
+        var user = await userManager.FindByIdAsync(userId);
+        user.ShouldNotBeNull();
+        (await userManager.AddToRoleAsync(user!, RoleConstants.Admin)).Succeeded.ShouldBeTrue();
     }
 
     private static async Task<UserDto> GetCurrentProfileAsync(HttpClient client)
