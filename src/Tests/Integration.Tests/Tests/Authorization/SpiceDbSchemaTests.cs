@@ -20,7 +20,7 @@ public sealed class SpiceDbSchemaTests(FshWebApplicationFactory factory)
         var users = await profiles.GetListAsync(CancellationToken.None);
         UserId administrator = new(users.Single(user => user.Email == TestConstants.RootAdminEmail).Id);
         UserId ordinary = new(Guid.NewGuid().ToString());
-        AuthorizationConsistency fresh = AuthorizationConsistency.AtLeastAsFresh(root.AuthorizationToken!);
+        AuthorizationConsistency fresh = AuthorizationConsistency.AtLeastAsFresh(root.AuthorizationToken!.Value);
 
         // Act
         PermissionCheckResult adminResult = await checker.CheckAsync(new PermissionCheck(

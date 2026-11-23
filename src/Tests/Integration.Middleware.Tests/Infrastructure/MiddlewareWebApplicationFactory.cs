@@ -68,7 +68,7 @@ public sealed class MiddlewareWebApplicationFactory : WebApplicationFactory<Prog
         .WithImage("authzed/spicedb:v1.57.1")
         .WithPortBinding(50051, true)
         .WithCommand("serve-testing", "--grpc-preshared-key", SpiceDbKey)
-        .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged("grpc server started"))
+        .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(50051))
         .WithAutoRemove(true)
         .WithCleanUp(true)
         .Build();

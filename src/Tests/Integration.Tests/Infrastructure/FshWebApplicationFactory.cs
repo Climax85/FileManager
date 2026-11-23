@@ -56,9 +56,8 @@ public sealed class FshWebApplicationFactory : WebApplicationFactory<Program>, I
         .Build();
     private readonly IContainer _spiceDb = new ContainerBuilder()
         .WithImage("authzed/spicedb:v1.57.1")
-        .WithPortBinding(50051, true)
+        .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(50051))
         .WithCommand("serve-testing", "--grpc-preshared-key", SpiceDbKey)
-        .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged("grpc server started"))
         .WithAutoRemove(true)
         .WithCleanUp(true)
         .Build();
