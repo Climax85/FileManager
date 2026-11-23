@@ -18,8 +18,8 @@ namespace Integration.Tests.Tests.Files;
 /// <list type="bullet">
 ///   <item>Private (visibility=1): readable only by the uploader. A non-owner in the same tenant
 ///   gets 404 on both GET metadata and GET /url (existence is not leaked).</item>
-///   <item>Public (visibility=0): readable by anyone in the tenant. A non-owner can read metadata,
-///   mint a download URL, and see the file in the tenant-wide <c>/shared</c> list.</item>
+///   <item>Public (visibility=0): readable metadata for anyone in the tenant and included in
+///   /shared, but durable URLs are omitted and non-owners cannot mint download URLs.</item>
 ///   <item>Flipping the bit (<c>PATCH /{id}/visibility</c>) is uploader-only — a non-owner gets 403.</item>
 /// </list>
 /// Tests use two users in the SAME tenant (owner = root admin, grantee = a freshly registered user)
@@ -111,25 +111,23 @@ public sealed class FileVisibilityAndSharingTests
         var dto = await response.DeserializeAsync<FileAssetDto>();
         dto.Id.ShouldBe(fileId);
         dto.Visibility.ShouldBe(Visibility.Public);
+        dto.PublicUrl.ShouldBeNull();
     }
 
     [Fact]
-    public async Task GetDownloadUrl_Should_Succeed_For_NonOwner_When_File_Is_Public()
+    public async Task GetDownloadUrl_Should_Return404_For_NonOwner_When_File_Is_Public()
     {
-        // Arrange
+        // Arrange — Public visibility affects metadata discovery, not download authorization.
         using var ownerClient = await _auth.CreateRootAdminClientAsync();
         var fileId = await UploadAndFinalizeAsync(ownerClient, "public-dl.pdf", "application/pdf", 256, visibility: 0);
 
         using var granteeClient = await RegisterAndLoginAsync("public-dl-reader");
 
-        // Act — non-owner mints a presigned GET for the Public file.
+        // Act — non-owner attempts to mint a presigned GET for the Public file.
         using var response = await granteeClient.GetAsync($"{FilesBasePath}/{fileId}/url");
 
-        // Assert — Public read is allowed; a real presigned URL comes back.
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var download = await response.DeserializeAsync<PresignedDownloadResponse>();
-        download.Url.ShouldNotBeNull();
-        download.Url.AbsoluteUri.ShouldContain("X-Amz-Signature");
+        // Assert — visibility never substitutes for resource download authorization.
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Fact]
@@ -148,6 +146,7 @@ public sealed class FileVisibilityAndSharingTests
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         var list = await response.DeserializeAsync<IReadOnlyList<FileAssetDto>>();
         list.ShouldContain(f => f.Id == fileId);
+        list.Single(f => f.Id == fileId).PublicUrl.ShouldBeNull();
     }
 
     [Fact]

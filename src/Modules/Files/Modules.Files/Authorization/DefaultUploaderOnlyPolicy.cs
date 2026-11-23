@@ -5,8 +5,8 @@ namespace FSH.Modules.Files.Authorization;
 /// <summary>
 /// Default policy used for the built-in <c>MyFiles</c> and <c>User</c> owner types.
 /// - Attach: any authenticated user (currentUserId is non-empty).
-/// - Read: Public files visible to anyone in tenant; Private files only to the uploader.
-/// - Delete: only the uploader.
+/// - Metadata read: Public files are discoverable in tenant; Private files are uploader-only.
+/// - Download/delete: only the uploader until organization resource authorization replaces it.
 ///
 /// Tenant scoping is handled by the framework's BaseDbContext (schema-per-tenant), not here.
 /// Owning modules with different rules (e.g. Tickets — participants only) register their own
@@ -33,6 +33,12 @@ internal sealed class DefaultUploaderOnlyPolicy : IFileAccessPolicy
         // Visibility 0 = Public, visible to anyone in the tenant.
         if (context.Visibility == 0) return Task.FromResult(true);
         return Task.FromResult(IsUploader(context, currentUserId));
+    }
+
+    public Task<bool> CanDownloadAsync(FileAccessContext context, string currentUserId, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return Task.FromResult(!string.IsNullOrEmpty(currentUserId) && IsUploader(context, currentUserId));
     }
 
     public Task<bool> CanDeleteAsync(FileAccessContext context, string currentUserId, CancellationToken cancellationToken)

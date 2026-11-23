@@ -18,6 +18,13 @@ public interface IFileAccessPolicy
 
     Task<bool> CanReadAsync(FileAccessContext context, string currentUserId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Whether the caller may receive a short-lived download credential. Defaults to the owning
+    /// module's read policy so specialized Catalog and Chat behavior remains unchanged.
+    /// </summary>
+    Task<bool> CanDownloadAsync(FileAccessContext context, string currentUserId, CancellationToken cancellationToken)
+        => CanReadAsync(context, currentUserId, cancellationToken);
+
     Task<bool> CanDeleteAsync(FileAccessContext context, string currentUserId, CancellationToken cancellationToken);
 
     /// <summary>

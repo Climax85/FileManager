@@ -96,7 +96,9 @@ public sealed class FileAsset : AggregateRoot<Guid>, ISoftDeletable
 
         SizeBytes = actualSize;
         ScanStatus = scanResult;
-        Status = scanResult == ScanStatus.Infected ? FileAssetStatus.Quarantined : FileAssetStatus.Available;
+        Status = scanResult == ScanStatus.Clean
+            ? FileAssetStatus.Available
+            : FileAssetStatus.Quarantined;
         UploadDeadline = null;
         UpdatedAtUtc = DateTime.UtcNow;
 

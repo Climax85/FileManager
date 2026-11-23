@@ -17,6 +17,14 @@ export const FileAssetStatus = {
 } as const;
 export type FileAssetStatusValue = (typeof FileAssetStatus)[keyof typeof FileAssetStatus];
 
+// Mirrors FSH.Modules.Files.Domain.ScanStatus.
+export const FileScanStatus = {
+  NotScanned: 0,
+  Clean: 1,
+  Infected: 2,
+  ScanFailed: 3,
+} as const;
+
 // Mirrors FSH.Modules.Files.Contracts.v1.DTOs.FileAssetDto.
 export type FileAssetDto = {
   id: string;
