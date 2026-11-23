@@ -39,9 +39,12 @@ public sealed class GetFileMetadataQueryHandler(
             throw new NotFoundException("file not found");
         }
 
-        // Public files get a durable URL safe to persist long-term, while private files mint a
-        // short-lived presigned GET on demand via the auth-gated url endpoint.
+        // Built-in File Manager resources never expose durable storage URLs. Specialized owner
+        // types retain their existing policy contract, but only clean available files may emit one.
         var publicUrl = f.Visibility == Visibility.Public
+            && f.Status == FileAssetStatus.Available
+            && f.ScanStatus == ScanStatus.Clean
+            && f.OwnerType is not "MyFiles" and not "User"
             ? storage.BuildPublicUrl(f.StorageKey)
             : null;
 

@@ -1,3 +1,7 @@
+using System.Globalization;
+using DotNet.Testcontainers.Builders;
+using DotNet.Testcontainers.Containers;
+
 using System.Reflection;
 using Amazon.S3;
 using Amazon.S3.Model;
@@ -48,9 +52,16 @@ public sealed class FshWebApplicationFactory : WebApplicationFactory<Program>, I
         .WithCleanUp(true)
         .Build();
 
+    private readonly IContainer _clamAv = new ContainerBuilder("clamav/clamav:stable")
+        .WithPortBinding(3310, true)
+        .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(3310))
+        .WithAutoRemove(true)
+        .WithCleanUp(true)
+        .Build();
+
     public async Task InitializeAsync()
     {
-        await Task.WhenAll(_postgres.StartAsync(), _minio.StartAsync());
+        await Task.WhenAll(_postgres.StartAsync(), _minio.StartAsync(), _clamAv.StartAsync());
         await CreateMinioBucketAsync();
 
         // Force host creation via the Server property (no leaked HttpClient)
@@ -74,6 +85,7 @@ public sealed class FshWebApplicationFactory : WebApplicationFactory<Program>, I
         await base.DisposeAsync();
         await _postgres.DisposeAsync();
         await _minio.DisposeAsync();
+        await _clamAv.DisposeAsync();
     }
 
     /// <summary>The MinIO endpoint URL exposed to the host configuration; useful for tests that need to PUT bytes directly.</summary>
@@ -148,6 +160,9 @@ public sealed class FshWebApplicationFactory : WebApplicationFactory<Program>, I
                 ["Storage:S3:ForcePathStyle"] = "true",
                 ["Storage:S3:PublicRead"] = "false",
                 ["Storage:S3:Region"] = "us-east-1",
+                ["Files:Scanner:Host"] = _clamAv.Hostname,
+                ["Files:Scanner:Port"] = _clamAv.GetMappedPublicPort(3310).ToString(CultureInfo.InvariantCulture),
+                ["Files:Scanner:TimeoutMilliseconds"] = "30000",
             });
         });
 

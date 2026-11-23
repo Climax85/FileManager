@@ -50,15 +50,15 @@ public sealed class FinalizeUploadCommandHandler(
         var head = await storage.HeadObjectAsync(asset.StorageKey, cancellationToken).ConfigureAwait(false)
             ?? throw new CustomException("upload not received", (IEnumerable<string>?)null, HttpStatusCode.Conflict);
 
-        // Allow declared+1% slack (S3 may differ slightly on multipart). Reject larger sizes.
-        var maxAllowed = asset.SizeBytes + Math.Max(1024L, asset.SizeBytes / 100);
-        if (head.SizeBytes > maxAllowed)
+        // The declared size is the signed upper bound. HEAD verifies the actual bytes because S3
+        // presigning does not enforce a content-length ceiling on the browser's PUT.
+        if (head.SizeBytes <= 0 || head.SizeBytes > asset.SizeBytes)
         {
             await storage.RemoveAsync(asset.StorageKey, cancellationToken).ConfigureAwait(false);
             db.FileAssets.Remove(asset);
             await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
             throw new CustomException(
-                $"uploaded size ({head.SizeBytes}) exceeds declared ({asset.SizeBytes})",
+                $"uploaded size ({head.SizeBytes}) is invalid for declared ({asset.SizeBytes})",
                 (IEnumerable<string>?)null,
                 HttpStatusCode.BadRequest);
         }
@@ -77,8 +77,15 @@ public sealed class FinalizeUploadCommandHandler(
         var scanResult = await scanner.ScanAsync(asset.StorageKey, cancellationToken).ConfigureAwait(false);
         asset.MarkAvailable(head.SizeBytes, scanResult);
 
-        // Debit quota with the actual bytes. Refunded on hard purge by PurgeDeletedFilesJob.
-        await quotas.RecordAsync(tenantId, QuotaResource.StorageBytes, head.SizeBytes, cancellationToken).ConfigureAwait(false);
+        // Atomically enforce and debit the actual bytes; RecordAsync alone would allow overflow.
+        var quota = await quotas.CheckAndRecordAsync(tenantId, QuotaResource.StorageBytes, head.SizeBytes, cancellationToken).ConfigureAwait(false);
+        if (!quota.Allowed)
+        {
+            throw new CustomException(
+                "storage quota exceeded by uploaded size",
+                (IEnumerable<string>?)null,
+                HttpStatusCode.TooManyRequests);
+        }
 
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 

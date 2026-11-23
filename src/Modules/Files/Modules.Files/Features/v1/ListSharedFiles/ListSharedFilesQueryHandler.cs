@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using FSH.Framework.Storage.Services;
 using FSH.Modules.Files.Contracts.v1.DTOs;
 using FSH.Modules.Files.Contracts.v1.Queries;
 using FSH.Modules.Files.Data;
@@ -15,7 +14,7 @@ namespace FSH.Modules.Files.Features.v1.ListSharedFiles;
 /// can render a "Shared in tenant" surface alongside "My files". Tenant scoping is handled by
 /// the framework's BaseDbContext (schema-per-tenant), not by a WHERE clause here.
 /// </summary>
-public sealed class ListSharedFilesQueryHandler(FilesDbContext db, IStorageService storage)
+public sealed class ListSharedFilesQueryHandler(FilesDbContext db)
     : IQueryHandler<ListSharedFilesQuery, ReadOnlyCollection<FileAssetDto>>
 {
     // Free-standing tenant files (not bound to a domain entity). Catalog/Tickets/Chat attachments
@@ -40,7 +39,7 @@ public sealed class ListSharedFilesQueryHandler(FilesDbContext db, IStorageServi
             .ConfigureAwait(false);
 
         return rows
-            .Select(f => FileAssetMapper.ToDto(f, storage.BuildPublicUrl(f.StorageKey)))
+            .Select(f => FileAssetMapper.ToDto(f))
             .ToList()
             .AsReadOnly();
     }

@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using FSH.Framework.Core.Context;
 using FSH.Framework.Core.Exceptions;
-using FSH.Framework.Storage.Services;
 using FSH.Modules.Files.Contracts.v1.DTOs;
 using FSH.Modules.Files.Contracts.v1.Queries;
 using FSH.Modules.Files.Data;
@@ -14,8 +13,7 @@ namespace FSH.Modules.Files.Features.v1.ListMyFiles;
 
 public sealed class ListMyFilesQueryHandler(
     FilesDbContext db,
-    ICurrentUser currentUser,
-    IStorageService storage)
+    ICurrentUser currentUser)
     : IQueryHandler<ListMyFilesQuery, ReadOnlyCollection<FileAssetDto>>
 {
     public async ValueTask<ReadOnlyCollection<FileAssetDto>> Handle(ListMyFilesQuery q, CancellationToken cancellationToken)
@@ -38,12 +36,10 @@ public sealed class ListMyFilesQueryHandler(
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        // Seed publicUrl for public files so the preview dialog can paint the image
-        // immediately from the list data, without waiting on a metadata refetch to mint it.
+        // File Manager clients always obtain a fresh authorized URL; list DTOs never carry
+        // durable object-storage URLs.
         return rows
-            .Select(f => FileAssetMapper.ToDto(
-                f,
-                f.Visibility == Visibility.Public ? storage.BuildPublicUrl(f.StorageKey) : null))
+            .Select(f => FileAssetMapper.ToDto(f))
             .ToList()
             .AsReadOnly();
     }

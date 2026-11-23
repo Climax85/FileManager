@@ -78,6 +78,19 @@ public class FileAssetTests
         f.ScanStatus.ShouldBe(ScanStatus.Infected);
     }
 
+    [Theory]
+    [InlineData(ScanStatus.NotScanned)]
+    [InlineData(ScanStatus.ScanFailed)]
+    public void MarkAvailable_Should_NotMakeFileAvailable_WhenScanDidNotSucceed(ScanStatus scanResult)
+    {
+        var f = NewPending();
+
+        f.MarkAvailable(2048, scanResult);
+
+        f.Status.ShouldNotBe(FileAssetStatus.Available);
+        f.ScanStatus.ShouldBe(scanResult);
+    }
+
     [Fact]
     public void MarkAvailable_Should_Reject_When_NotPendingUpload()
     {

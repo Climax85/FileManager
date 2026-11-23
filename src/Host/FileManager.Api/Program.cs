@@ -37,6 +37,11 @@ if (builder.Environment.IsProduction())
     Require(config, "DatabaseOptions:ConnectionString");
     Require(config, "CachingOptions:Redis");
     Require(config, "JwtOptions:SigningKey");
+    Require(config, "Storage:S3:Bucket");
+    if (!string.Equals(config["Storage:Provider"], "s3", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException("Production File Manager storage must use private S3-compatible storage.");
+    }
 }
 
 builder.Services.AddMediator(o =>

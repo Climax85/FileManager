@@ -11,6 +11,9 @@ public sealed class FilesOptions
     /// <summary>Lifetime of a presigned GET URL minted by <c>GET /files/{id}/url</c>.</summary>
     public int DownloadUrlTtlMinutes { get; set; } = 5;
 
+    /// <summary>Connection and protocol timeout for the real ClamAV scanner.</summary>
+    public ClamAvScannerOptions Scanner { get; set; } = new();
+
     /// <summary>How long a <c>PendingUpload</c> row is allowed to linger before the orphan purge job hard-deletes it.</summary>
     public int OrphanRetentionMinutes { get; set; } = 60;
 
@@ -25,4 +28,11 @@ public sealed class FileCategoryOptions
 {
     public List<string> AllowedExtensions { get; set; } = [];
     public long MaxBytes { get; set; }
+}
+
+public sealed class ClamAvScannerOptions
+{
+    public string Host { get; set; } = "localhost";
+    public int Port { get; set; } = 3310;
+    public int TimeoutMilliseconds { get; set; } = 30_000;
 }

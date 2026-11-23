@@ -13,6 +13,6 @@ public static class GetFileMetadataEndpoint
                 async (Guid id, IMediator mediator, CancellationToken cancellationToken) =>
                     Results.Ok(await mediator.Send(new GetFileMetadataQuery(id), cancellationToken)))
             .WithName("GetFileMetadata")
-            .WithSummary("Get FileAsset metadata (plus a public URL if Visibility=Public)")
+            .WithSummary("Get FileAsset metadata")
             .RequireAuthorization();
 }

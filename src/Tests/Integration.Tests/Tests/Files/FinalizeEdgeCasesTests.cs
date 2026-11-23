@@ -54,10 +54,10 @@ public sealed class FinalizeEdgeCasesTests
     {
         using var client = await _auth.CreateRootAdminClientAsync();
 
-        // Declare 256 bytes, upload 32 KB. The handler allows declared+1% slack (min 1 KiB), so 32 KB busts it.
+        // Declared size is the upper bound signed by the API; even one extra byte is rejected.
         var presigned = await RequestPresignedUploadAsync(client, "lying.pdf", "application/pdf", 256, "Document");
 
-        byte[] bytes = new byte[32 * 1024];
+        byte[] bytes = new byte[257];
         RandomNumberGenerator.Fill(bytes);
 
         using var raw = new HttpClient();
