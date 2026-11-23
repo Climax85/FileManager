@@ -56,12 +56,20 @@ public sealed class IdentityService : IIdentityService
         ValidateUserStatus(user);
         ValidateTenantStatus(tenant);
 
-        if (user.TwoFactorEnabled)
+        bool mfaCompleted = user.TwoFactorEnabled;
+        if (mfaCompleted)
         {
             await VerifyTwoFactorOrThrowAsync(user, twoFactorCode);
         }
 
         var claims = await BuildUserClaimsAsync(user, tenant.Id, ct);
+        if (mfaCompleted)
+        {
+            // Only password + authenticator login receives this assertion. Refresh and
+            // impersonation flows deliberately omit it and must re-authenticate for MFA-gated changes.
+            claims.Add(new Claim("amr", "mfa"));
+        }
+
         return (user.Id, claims);
     }
 
