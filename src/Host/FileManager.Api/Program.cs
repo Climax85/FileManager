@@ -1,6 +1,7 @@
 ﻿using FSH.Framework.Web;
 using FSH.Framework.Web.Modules;
 using FSH.Modules.Auditing;
+using FSH.Modules.Authorization;
 using FSH.Modules.Identity;
 using FSH.Modules.Identity.Contracts.v1.Tokens.TokenGeneration;
 using FSH.Modules.Identity.Features.v1.Tokens.TokenGeneration;
@@ -62,6 +63,8 @@ builder.Services.AddMediator(o =>
         typeof(FSH.Modules.Chat.Contracts.v1.Commands.CreateChannelCommand),
         typeof(FSH.Modules.Chat.ChatModule),
         typeof(FSH.Modules.Notifications.Contracts.v1.Commands.MarkNotificationReadCommand),
+        typeof(FSH.Modules.Authorization.Contracts.AuthorizationContractsMarker),
+        typeof(FSH.Modules.Authorization.AuthorizationModule),
         typeof(FSH.Modules.Notifications.NotificationsModule)];
 });
 
@@ -77,6 +80,7 @@ var moduleAssemblies = new Assembly[]
     typeof(TicketsModule).Assembly,
     typeof(FSH.Modules.Chat.ChatModule).Assembly,
     typeof(FSH.Modules.Notifications.NotificationsModule).Assembly,
+    typeof(FSH.Modules.Authorization.AuthorizationModule).Assembly,
 };
 
 builder.AddHeroPlatform(o =>

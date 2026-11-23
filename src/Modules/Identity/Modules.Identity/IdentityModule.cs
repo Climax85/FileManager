@@ -105,6 +105,9 @@ public class IdentityModule : IModule
         services.AddTransient<IUserRoleService, UserRoleService>();
         services.AddTransient<IUserPasswordService, UserPasswordService>();
         services.AddTransient<IUserPermissionService, UserPermissionService>();
+        services.AddScoped<OrganizationAccessReader>();
+        services.AddScoped<IOrganizationAdminReader>(sp => sp.GetRequiredService<OrganizationAccessReader>());
+        services.AddScoped<IOrganizationMembershipReader>(sp => sp.GetRequiredService<OrganizationAccessReader>());
 
         // Facade for backward compatibility
         services.AddTransient<IUserService, UserService>();

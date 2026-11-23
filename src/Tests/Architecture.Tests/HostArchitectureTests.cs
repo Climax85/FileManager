@@ -45,6 +45,8 @@ public class HostArchitectureTests
             "FSH.Modules.Identity.Features",
             "FSH.Modules.Identity.Data",
             "FSH.Modules.Multitenancy.Features",
+            "FSH.Modules.Authorization.Features",
+            "FSH.Modules.Authorization.Data",
             "FSH.Modules.Multitenancy.Data"
         };
 

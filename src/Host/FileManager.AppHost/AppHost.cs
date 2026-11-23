@@ -20,6 +20,29 @@ var postgresServer = builder.AddPostgres("postgres")
 
 var postgres = postgresServer.AddDatabase("fsh-db");
 
+// SpiceDB uses its own PostgreSQL server, database, and credentials so authorization data
+// cannot be read or modified through the application's database connection.
+var spiceDbPostgresUser = builder.AddParameter("spicedb-postgres-user", "spicedb");
+var spiceDbPostgresPassword = builder.AddParameter("spicedb-postgres-password", "spicedb-dev-password", secret: true);
+var spiceDbKey = builder.AddParameter("spicedb-preshared-key", "development-only-spicedb-key", secret: true);
+var spiceDbPostgresServer = builder.AddPostgres("spicedb-postgres", spiceDbPostgresUser, spiceDbPostgresPassword)
+    .WithDataVolume($"{appPrefix}-spicedb-postgres-data")
+    .WithLifetime(ContainerLifetime.Persistent);
+var spiceDbPostgres = spiceDbPostgresServer.AddDatabase("spicedb-db");
+var spiceDbPostgresEndpoint = spiceDbPostgresServer.GetEndpoint("tcp");
+var spiceDbConnection = ReferenceExpression.Create(
+    $"postgres://{spiceDbPostgresUser}:{spiceDbPostgresPassword}@{spiceDbPostgresEndpoint.Property(EndpointProperty.HostAndPort)}/spicedb-db?sslmode=disable");
+var spiceDbMigrate = builder.AddContainer("spicedb-migrate", "authzed/spicedb", "v1.57.1")
+    .WithArgs("migrate", "head", "--datastore-engine", "postgres", "--datastore-conn-uri", spiceDbConnection)
+    .WaitFor(spiceDbPostgres);
+var spiceDb = builder.AddContainer("spicedb", "authzed/spicedb", "v1.57.1")
+    .WithArgs("serve", "--grpc-preshared-key", spiceDbKey, "--datastore-engine", "postgres", "--datastore-conn-uri", spiceDbConnection)
+    .WithEndpoint(targetPort: 50051, scheme: "tcp", name: "grpc")
+    .WithLifetime(ContainerLifetime.Persistent)
+    .WaitForCompletion(spiceDbMigrate);
+var spiceDbEndpoint = spiceDb.GetEndpoint("grpc");
+var spiceDbAddress = ReferenceExpression.Create($"http://{spiceDbEndpoint.Property(EndpointProperty.HostAndPort)}");
+
 // Warm pooled-connection floor for the long-running API — Npgsql's default Minimum Pool Size of 0 lets the pool drain to cold, so /health/ready's ~10 concurrent DbContext checks cold-open a cohort at once and intermittently stall the probe; a floor keeps connections warm for reuse.
 var apiPgConnection = ReferenceExpression.Create(
     $"{postgres.Resource.ConnectionStringExpression};Minimum Pool Size=5");
@@ -86,6 +109,10 @@ var migrator = builder.AddProject<Projects.FileManager_DbMigrator>($"{appPrefix}
     .WithReference(postgres)
     .WaitFor(postgres)
     .WithEnvironment("DatabaseOptions__Provider", "POSTGRESQL")
+    .WaitFor(spiceDb)
+    .WithEnvironment("Authorization__SpiceDB__Endpoint", spiceDbAddress)
+    .WithEnvironment("Authorization__SpiceDB__PresharedKey", spiceDbKey)
+    .WithEnvironment("Authorization__SpiceDB__UseTls", "false")
     .WithEnvironment("DatabaseOptions__ConnectionString", postgres.Resource.ConnectionStringExpression)
     .WithEnvironment("DatabaseOptions__MigrationsAssembly", "FileManager.Migrations.PostgreSQL")
     .WithEnvironment("Seed__DefaultAdminPassword", "123Pa$$word!")
@@ -97,6 +124,10 @@ var demoSeeder = builder.AddProject<Projects.FileManager_DbMigrator>($"{appPrefi
     .WaitFor(postgres)
     .WaitForCompletion(migrator)
     .WithEnvironment("DOTNET_ENVIRONMENT", "Development")
+    .WaitFor(spiceDb)
+    .WithEnvironment("Authorization__SpiceDB__Endpoint", spiceDbAddress)
+    .WithEnvironment("Authorization__SpiceDB__PresharedKey", spiceDbKey)
+    .WithEnvironment("Authorization__SpiceDB__UseTls", "false")
     .WithEnvironment("DatabaseOptions__Provider", "POSTGRESQL")
     .WithEnvironment("DatabaseOptions__ConnectionString", postgres.Resource.ConnectionStringExpression)
     .WithEnvironment("DatabaseOptions__MigrationsAssembly", "FileManager.Migrations.PostgreSQL")
@@ -109,6 +140,10 @@ var api = builder.AddProject<Projects.FileManager_Api>($"{appPrefix}-api")
     .WaitFor(postgres)
     .WaitFor(redis)
     .WaitForCompletion(minioInit)
+    .WaitFor(spiceDb)
+    .WithEnvironment("Authorization__SpiceDB__Endpoint", spiceDbAddress)
+    .WithEnvironment("Authorization__SpiceDB__PresharedKey", spiceDbKey)
+    .WithEnvironment("Authorization__SpiceDB__UseTls", "false")
     .WaitForCompletion(migrator)
     .WaitForCompletion(demoSeeder)
     .WithExternalHttpEndpoints()

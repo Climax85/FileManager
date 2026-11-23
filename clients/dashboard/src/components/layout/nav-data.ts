@@ -57,6 +57,7 @@ export const topNavTop: NavSpec[] = [
   // server-side (Chat → channels list, Files → /files/mine). Same convention
   // as trash-permissions.ts: if the endpoint's permission changes, mirror it.
   { to: "/chat", label: "Chat", icon: MessageCircle, perm: "Permissions.Chat.Channels.View" },
+  { to: "/file-manager", label: "File Manager", icon: FolderTree },
   { to: "/files", label: "My Files", icon: FolderOpen, perm: "Permissions.Files.Upload" },
 ];
 
