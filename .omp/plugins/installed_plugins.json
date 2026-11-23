@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "plugins": {
+    "dotnet-claude-kit@dotnet-claude-kit": [
+      {
+        "scope": "project",
+        "installPath": "C:\\Users\\Patrick\\.omp\\plugins\\cache\\plugins\\dotnet-claude-kit___dotnet-claude-kit___0.14.0",
+        "version": "0.14.0",
+        "installedAt": "2026-11-23T18:06:42.866Z",
+        "lastUpdated": "2026-11-23T18:06:42.866Z"
+      }
+    ],
+    "spicedb-dev@authzed-marketplace": [
+      {
+        "scope": "project",
+        "installPath": "C:\\Users\\Patrick\\.omp\\plugins\\cache\\plugins\\authzed-marketplace___spicedb-dev___1.1.0",
+        "version": "1.1.0",
+        "installedAt": "2026-11-23T18:09:39.552Z",
+        "lastUpdated": "2026-11-23T18:09:39.552Z"
+      }
+    ]
+  }
+}
