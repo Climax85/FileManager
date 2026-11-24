@@ -18,6 +18,7 @@ public sealed class ResourceSharingService(
     AuthorizationDbContext db,
     ICurrentUser currentUser,
     IOrganizationMembershipReader membershipReader,
+    IOrganizationGroupReader groupReader,
     IPermissionChecker permissionChecker,
     IRelationshipWriter relationshipWriter,
     ResourceLineageReader lineageReader,
@@ -52,6 +53,11 @@ public sealed class ResourceSharingService(
         {
             return await ConfirmGrantAsync(existing, cancellationToken).ConfigureAwait(false);
         }
+        if (subject.Object.Type == AuthorizationObjectType.Group)
+        {
+            await ReconcileGroupAsync(context.OrganizationId, subject.Object, cancellationToken).ConfigureAwait(false);
+        }
+
 
         Guid operationId = Guid.CreateVersion7();
         DateTimeOffset now = timeProvider.GetUtcNow();
@@ -151,10 +157,15 @@ public sealed class ResourceSharingService(
         }
 
         IReadOnlyList<AuthorizationObject> lineage = await lineageReader.ReadAsync(resource, context.OrganizationId, requestedToken, cancellationToken).ConfigureAwait(false);
+        IReadOnlyList<GroupId> groupIds = access == EffectiveAccessLevel.None
+            ? []
+            : await groupReader.GetGroupIdsAsync(subjectId, cancellationToken).ConfigureAwait(false);
+        string[] groupSubjectIds = [.. groupIds.Select(x => x.ToString())];
         Guid[] resourceIds = [.. lineage.Select(x => Guid.Parse(x.ObjectId))];
         List<ResourceGrant> grants = access == EffectiveAccessLevel.None ? [] : await db.ResourceGrants.AsNoTracking()
             .Where(x => resourceIds.Contains(x.ResourceId) && x.Status == ResourceGrantStatus.Active &&
                 ((x.SubjectType == AuthorizationObjectType.User && x.SubjectId == subjectId.Value) ||
+                 (x.SubjectType == AuthorizationObjectType.Group && groupSubjectIds.Contains(x.SubjectId)) ||
                  (x.SubjectType == AuthorizationObjectType.Organization && x.SubjectId == context.OrganizationId.Value)))
             .ToListAsync(cancellationToken).ConfigureAwait(false);
         EffectiveAccessSourceResponse[] sources = [.. grants.Select(grant =>
@@ -164,6 +175,10 @@ public sealed class ResourceSharingService(
             if (grant.SubjectType == AuthorizationObjectType.Organization)
             {
                 source = EffectiveAccessSourceKind.Organization;
+            }
+            else if (grant.SubjectType == AuthorizationObjectType.Group)
+            {
+                source = EffectiveAccessSourceKind.Group;
             }
             else
             {
@@ -205,6 +220,22 @@ public sealed class ResourceSharingService(
             }
             return AuthorizationSubjects.For(userId);
         }
+        if (command.SubjectType == AuthorizationObjectType.Group)
+        {
+            if (!Guid.TryParse(command.SubjectId, out Guid parsedGroupId) || parsedGroupId == Guid.Empty)
+            {
+                throw new CustomException("A valid group is required.", [], HttpStatusCode.BadRequest);
+            }
+
+            var groupId = new GroupId(parsedGroupId);
+            if (!await groupReader.GroupExistsAsync(groupId, cancellationToken).ConfigureAwait(false))
+            {
+                throw new NotFoundException("group not found");
+            }
+
+            return AuthorizationSubjects.Members(AuthorizationObjects.For(groupId));
+        }
+
         if (command.SubjectType != AuthorizationObjectType.Organization ||
             !string.Equals(command.SubjectId.Trim(), organizationId.Value, StringComparison.Ordinal))
         {
@@ -219,6 +250,34 @@ public sealed class ResourceSharingService(
             throw new CustomException("Organization-wide grants support viewer or editor access, not manager access.", [], HttpStatusCode.BadRequest);
         }
         return AuthorizationSubjects.Members(AuthorizationObjects.For(organizationId));
+    }
+
+    private async ValueTask ReconcileGroupAsync(
+        OrganizationId organizationId,
+        AuthorizationObject group,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyList<UserId> members = await groupReader.GetMemberIdsAsync(
+            new GroupId(Guid.Parse(group.ObjectId)), cancellationToken).ConfigureAwait(false);
+        List<RelationshipMutation> mutations =
+        [
+            RelationshipMutation.Touch(group, AuthorizationRelation.Organization,
+                new AuthorizationSubject(AuthorizationObjects.For(organizationId))),
+        ];
+        foreach (UserId member in members)
+        {
+            mutations.Add(RelationshipMutation.Touch(
+                group, AuthorizationRelation.Member, AuthorizationSubjects.For(member)));
+        }
+
+        try
+        {
+            _ = await relationshipWriter.WriteAsync(Guid.CreateVersion7(), mutations, cancellationToken).ConfigureAwait(false);
+        }
+        catch (RpcException exception)
+        {
+            throw Unavailable("Group membership could not be synchronized; the grant was not created.", exception);
+        }
     }
 
     private async ValueTask<PermissionCheckResult> RequireManagerAsync(

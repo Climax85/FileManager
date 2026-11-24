@@ -27,7 +27,7 @@ definition folder {
     relation viewer_unit: organizational_unit
     relation editor: user | group#member | organization#member
     relation editor_unit: organizational_unit
-    relation manager: user
+    relation manager: user | group#member
 
     permission view: user = organization->member & (viewer + viewer_unit->member + editor + editor_unit->member + manager + organization->admin + parent->view)
     permission edit: user = organization->member & (editor + editor_unit->member + manager + organization->admin + parent->edit)
@@ -41,7 +41,7 @@ definition file {
     relation viewer_unit: organizational_unit
     relation editor: user | group#member | organization#member
     relation editor_unit: organizational_unit
-    relation manager: user
+    relation manager: user | group#member
 
     permission view: user = organization->member & (viewer + viewer_unit->member + editor + editor_unit->member + manager + organization->admin + folder->view)
     permission download: user = view
