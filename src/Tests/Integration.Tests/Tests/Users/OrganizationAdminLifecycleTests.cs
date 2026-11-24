@@ -17,6 +17,8 @@ using Integration.Tests.Tests.Auditing;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using RoleDto = FSH.Modules.Identity.Contracts.DTOs.RoleDto;
+using UserDto = FSH.Modules.Identity.Contracts.DTOs.UserDto;
 
 namespace Integration.Tests.Tests.Users;
 
@@ -336,6 +338,7 @@ public sealed class OrganizationAdminLifecycleTests
         await action(scope.ServiceProvider.GetRequiredService<UserManager<FshUser>>());
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA5350:Do Not Use Weak Cryptographic Algorithms", Justification = "RFC 6238 authenticator interoperability requires HMAC-SHA1.")]
     private static string GenerateAuthenticatorCode(string base32Key)
     {
         byte[] key = DecodeBase32(base32Key);

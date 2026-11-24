@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 using Authzed.Api.V1;
 using FSH.Modules.Authorization.Contracts;
 using Google.Protobuf.WellKnownTypes;
@@ -33,19 +35,28 @@ public static class AuthzedChannelFactory
         });
     }
 
-    public static ObjectReference Object(AuthorizationObject value) => new()
+    [SuppressMessage("Naming", "CA1720:Identifiers should not contain type names", Justification = "Object is the SpiceDB API domain term.")]
+    public static ObjectReference Object(AuthorizationObject value)
     {
-        ObjectType = value.Definition,
-        ObjectId = value.ObjectId,
-    };
+        ArgumentNullException.ThrowIfNull(value);
+        return new ObjectReference
+        {
+            ObjectType = value.Definition,
+            ObjectId = value.ObjectId,
+        };
+    }
 
-    public static SubjectReference Subject(AuthorizationSubject value) => new()
+    public static SubjectReference Subject(AuthorizationSubject value)
     {
-        Object = Object(value.Object),
-        OptionalRelation = value.OptionalRelation is null
-            ? string.Empty
-            : AuthorizationSchema.Relation(value.OptionalRelation.Value),
-    };
+        ArgumentNullException.ThrowIfNull(value);
+        return new SubjectReference
+        {
+            Object = Object(value.Object),
+            OptionalRelation = value.OptionalRelation is null
+                ? string.Empty
+                : AuthorizationSchema.Relation(value.OptionalRelation.Value),
+        };
+    }
 
     public static Consistency Consistency(AuthorizationConsistency? value) =>
         value?.AtLeastAsFreshToken is AuthorizationToken token
@@ -54,6 +65,7 @@ public static class AuthzedChannelFactory
 
     public static RelationshipUpdate Update(RelationshipMutation mutation)
     {
+        ArgumentNullException.ThrowIfNull(mutation);
         var relationship = new Relationship
         {
             Resource = Object(mutation.Resource),

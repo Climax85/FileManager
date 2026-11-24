@@ -51,9 +51,9 @@ public sealed class OrganizationRootTests
         {
             await AuthorizationTestData.UseRootTenantAsync(scope);
             var db = scope.ServiceProvider.GetRequiredService<AuthorizationDbContext>();
-            db.Folders.Count(f => f.IsRoot).ShouldBe(1);
-            db.OutboxMessages.Count().ShouldBeGreaterThan(0);
-            db.RelationshipSyncs.Count(s => s.Status == RelationshipSynchronizationStatus.Confirmed).ShouldBeGreaterThan(0);
+            (await db.Folders.CountAsync(f => f.IsRoot)).ShouldBe(1);
+            (await db.OutboxMessages.CountAsync()).ShouldBeGreaterThan(0);
+            (await db.RelationshipSyncs.CountAsync(s => s.Status == RelationshipSynchronizationStatus.Confirmed)).ShouldBeGreaterThan(0);
         }
     }
 

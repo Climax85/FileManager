@@ -2,6 +2,7 @@ namespace FSH.Modules.Authorization.Contracts;
 
 public enum RelationshipSynchronizationStatus
 {
+    None = 0,
     Pending = 1,
     Confirmed = 2,
 }

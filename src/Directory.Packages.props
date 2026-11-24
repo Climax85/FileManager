@@ -40,7 +40,7 @@
   </ItemGroup>
   <ItemGroup Label="Authorization">
     <PackageVersion Include="Authzed.Net" Version="1.6.0" />
-    <PackageVersion Include="Grpc.Net.Client" Version="2.71.0" />
+    <PackageVersion Include="Grpc.Net.Client" Version="2.80.0" />
   </ItemGroup>
   <ItemGroup>
     <PackageVersion Include="AutoFixture" Version="4.18.1" />

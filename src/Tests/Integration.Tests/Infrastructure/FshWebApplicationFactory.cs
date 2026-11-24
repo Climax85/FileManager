@@ -26,8 +26,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Testcontainers.Minio;
-using DotNet.Testcontainers.Builders;
-using DotNet.Testcontainers.Containers;
 using Testcontainers.PostgreSql;
 
 namespace Integration.Tests.Infrastructure;
@@ -54,8 +52,7 @@ public sealed class FshWebApplicationFactory : WebApplicationFactory<Program>, I
         .WithAutoRemove(true)
         .WithCleanUp(true)
         .Build();
-    private readonly IContainer _spiceDb = new ContainerBuilder()
-        .WithImage("authzed/spicedb:v1.57.1")
+    private readonly IContainer _spiceDb = new ContainerBuilder("authzed/spicedb:v1.57.1")
         .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(50051))
         .WithCommand("serve-testing", "--grpc-preshared-key", SpiceDbKey)
         .WithAutoRemove(true)

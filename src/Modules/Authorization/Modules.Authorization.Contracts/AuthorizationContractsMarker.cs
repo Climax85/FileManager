@@ -1,3 +1,3 @@
 namespace FSH.Modules.Authorization.Contracts;
 
-public sealed class AuthorizationContractsMarker;
+public static class AuthorizationContractsMarker;
