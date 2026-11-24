@@ -29,6 +29,24 @@ namespace FileManager.Migrations.PostgreSQL.Files
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset?>("AuthorizationConfirmedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("AuthorizationOperationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AuthorizationSynchronizationError")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("AuthorizationSynchronizationStatus")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("AuthorizationToken")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
                     b.Property<string>("ContentType")
                         .IsRequired()
                         .HasMaxLength(128)
@@ -70,6 +88,9 @@ namespace FileManager.Migrations.PostgreSQL.Files
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<Guid?>("ParentFolderId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("ScanStatus")
                         .HasColumnType("integer");
 
@@ -99,6 +120,14 @@ namespace FileManager.Migrations.PostgreSQL.Files
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ParentFolderId")
+                        .HasDatabaseName("IX_FileAsset_ParentFolder");
+
+                    b.HasIndex("AuthorizationOperationId", "TenantId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_FileAsset_AuthorizationOperation")
+                        .HasFilter("\"AuthorizationOperationId\" IS NOT NULL");
+
                     b.HasIndex("Status")
                         .HasDatabaseName("IX_FileAsset_Status");
 
@@ -116,6 +145,33 @@ namespace FileManager.Migrations.PostgreSQL.Files
                     b.ToTable("FileAssets", "files");
 
                     b.HasAnnotation("Finbuckle:MultiTenant", true);
+                });
+
+            modelBuilder.Entity("FSH.Framework.Eventing.Outbox.OutboxMessage", b =>
+                {
+                    b.Property<Guid>("Id").HasColumnType("uuid");
+                    b.Property<string>("CorrelationId").HasMaxLength(128).HasColumnType("character varying(128)");
+                    b.Property<DateTime>("CreatedOnUtc").HasColumnType("timestamp with time zone");
+                    b.Property<bool>("IsDead").HasColumnType("boolean");
+                    b.Property<string>("LastError").HasColumnType("text");
+                    b.Property<string>("Payload").IsRequired().HasColumnType("text");
+                    b.Property<DateTime?>("ProcessedOnUtc").HasColumnType("timestamp with time zone");
+                    b.Property<int>("RetryCount").HasColumnType("integer");
+                    b.Property<string>("TenantId").HasMaxLength(64).HasColumnType("character varying(64)");
+                    b.Property<string>("Type").IsRequired().HasMaxLength(512).HasColumnType("character varying(512)");
+                    b.HasKey("Id");
+                    b.ToTable("OutboxMessages", "files");
+                });
+
+            modelBuilder.Entity("FSH.Framework.Eventing.Inbox.InboxMessage", b =>
+                {
+                    b.Property<Guid>("Id").HasColumnType("uuid");
+                    b.Property<string>("HandlerName").HasMaxLength(256).HasColumnType("character varying(256)");
+                    b.Property<string>("EventType").IsRequired().HasMaxLength(512).HasColumnType("character varying(512)");
+                    b.Property<DateTime>("ProcessedOnUtc").HasColumnType("timestamp with time zone");
+                    b.Property<string>("TenantId").HasMaxLength(64).HasColumnType("character varying(64)");
+                    b.HasKey("Id", "HandlerName");
+                    b.ToTable("InboxMessages", "files");
                 });
 #pragma warning restore 612, 618
         }
