@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Routing;
 
 namespace FSH.Modules.Authorization.Features.v1.MoveResource;
 
-public static class MoveResourceEndpoint
+public static class UpdateResourceParentEndpoint
 {
     internal static RouteHandlerBuilder MapMoveResourceEndpoint(this IEndpointRouteBuilder endpoints) =>
         endpoints.MapPost("/resources/{resourceType}/{resourceId:guid}/move", async (
