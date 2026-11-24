@@ -58,6 +58,7 @@ public enum EffectiveAccessLevel
 
 public enum EffectiveAccessSourceKind
 {
+    None = 0,
     Direct = 1,
     Inherited = 2,
     Organization = 3,
