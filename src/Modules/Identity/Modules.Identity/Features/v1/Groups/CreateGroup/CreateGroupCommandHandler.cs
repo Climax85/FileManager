@@ -4,6 +4,7 @@ using FSH.Modules.Identity.Contracts.DTOs;
 using FSH.Modules.Identity.Contracts.v1.Groups.CreateGroup;
 using FSH.Modules.Identity.Data;
 using FSH.Modules.Identity.Domain;
+using FSH.Modules.Identity.Services;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,11 +14,16 @@ public sealed class CreateGroupCommandHandler : ICommandHandler<CreateGroupComma
 {
     private readonly IdentityDbContext _dbContext;
     private readonly ICurrentUser _currentUser;
+    private readonly GroupAuthorizationProjection _authorizationProjection;
 
-    public CreateGroupCommandHandler(IdentityDbContext dbContext, ICurrentUser currentUser)
+    public CreateGroupCommandHandler(
+        IdentityDbContext dbContext,
+        ICurrentUser currentUser,
+        GroupAuthorizationProjection authorizationProjection)
     {
         _dbContext = dbContext;
         _currentUser = currentUser;
+        _authorizationProjection = authorizationProjection;
     }
 
     public async ValueTask<GroupDto> Handle(CreateGroupCommand command, CancellationToken cancellationToken)
@@ -64,7 +70,7 @@ public sealed class CreateGroupCommandHandler : ICommandHandler<CreateGroupComma
         }
 
         _dbContext.Groups.Add(group);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _authorizationProjection.SaveCreatedAsync(group.Id, cancellationToken).ConfigureAwait(false);
 
         return new GroupDto
         {

@@ -108,6 +108,7 @@ public class IdentityModule : IModule
         services.AddScoped<OrganizationAccessReader>();
         services.AddScoped<IOrganizationAdminReader>(sp => sp.GetRequiredService<OrganizationAccessReader>());
         services.AddScoped<IOrganizationMembershipReader>(sp => sp.GetRequiredService<OrganizationAccessReader>());
+        services.AddScoped<IOrganizationGroupReader>(sp => sp.GetRequiredService<OrganizationAccessReader>());
 
         // Facade for backward compatibility
         services.AddTransient<IUserService, UserService>();
@@ -143,6 +144,8 @@ public class IdentityModule : IModule
 
         // Register group role service for group-derived permissions
         services.AddScoped<IGroupRoleService, GroupRoleService>();
+        services.AddScoped<GroupAuthorizationProjection>();
+        services.AddScoped<FSH.Framework.Eventing.Outbox.EfCoreOutboxStore<IdentityDbContext>>();
 
         // Quota gauge: reports live user count per tenant for the Users quota.
         services.AddScoped<IQuotaGaugeProvider, UserCountQuotaGaugeProvider>();

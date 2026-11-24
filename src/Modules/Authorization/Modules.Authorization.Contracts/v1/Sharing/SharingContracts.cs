@@ -62,6 +62,7 @@ public enum EffectiveAccessSourceKind
     Direct = 1,
     Inherited = 2,
     Organization = 3,
+    Group = 4,
 }
 
 public sealed record EffectiveAccessSourceResponse(

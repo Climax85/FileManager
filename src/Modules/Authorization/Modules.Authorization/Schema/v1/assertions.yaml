@@ -11,6 +11,10 @@ relationships: |
   folder:acme-root#manager@user:alice
   folder:acme-root#viewer@user:carol
   folder:acme-root#viewer@group:acme-team#member
+  folder:acme-group-editor#organization@organization:acme
+  folder:acme-group-editor#editor@group:acme-team#member
+  folder:acme-group-manager#organization@organization:acme
+  folder:acme-group-manager#manager@group:acme-team#member
   folder:acme-child#organization@organization:acme
   folder:acme-child#parent@folder:acme-root
   folder:acme-child#editor@user:dan
@@ -18,6 +22,9 @@ relationships: |
   folder:other-root#manager@user:eve
   file:acme-file#organization@organization:acme
   file:acme-file#folder@folder:acme-child
+  file:acme-group-file#organization@organization:acme
+  file:acme-group-file#folder@folder:acme-child
+  file:acme-group-file#manager@group:acme-team#member
   group:acme-team#organization@organization:acme
   group:acme-team#member@user:bob
   organizational_unit:acme-parent#organization@organization:acme
@@ -48,6 +55,14 @@ assertions:
     - "folder:acme-root#manage@user:alice"
     - "folder:acme-root#view@user:carol"
     - "folder:acme-root#view@user:bob"
+    - "folder:acme-group-editor#view@user:bob"
+    - "folder:acme-group-editor#edit@user:bob"
+    - "folder:acme-group-manager#view@user:bob"
+    - "folder:acme-group-manager#edit@user:bob"
+    - "folder:acme-group-manager#manage@user:bob"
+    - "file:acme-group-file#view@user:bob"
+    - "file:acme-group-file#edit@user:bob"
+    - "file:acme-group-file#manage@user:bob"
     - "folder:acme-unit-shared#view@user:carol"
     - "folder:acme-unit-shared#view@user:dan"
     - "folder:acme-org-shared#view@user:bob"
@@ -67,6 +82,13 @@ assertions:
     - "folder:acme-depth-4#manage@user:dan"
   assertFalse:
     - "folder:acme-root#view@user:frank"
+    - "folder:acme-root#view@user:dan"
+    - "folder:acme-group-editor#view@user:carol"
+    - "folder:acme-group-editor#manage@user:bob"
+    - "folder:acme-group-manager#view@user:carol"
+    - "folder:acme-group-manager#manage@user:carol"
+    - "folder:acme-group-manager#view@user:eve"
+    - "file:acme-group-file#manage@user:carol"
     - "folder:acme-unit-shared#view@user:bob"
     - "folder:acme-org-shared#view@user:eve"
     - "folder:acme-org-shared#edit@user:bob"
