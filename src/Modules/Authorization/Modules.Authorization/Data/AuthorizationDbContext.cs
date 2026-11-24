@@ -23,6 +23,7 @@ public sealed class AuthorizationDbContext(
     public DbSet<OrganizationProjection> Organizations => Set<OrganizationProjection>();
     public DbSet<Folder> Folders => Set<Folder>();
     public DbSet<RelationshipSynchronization> RelationshipSyncs => Set<RelationshipSynchronization>();
+    public DbSet<ResourceGrant> ResourceGrants => Set<ResourceGrant>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<InboxMessage> InboxMessages => Set<InboxMessage>();
 

@@ -46,7 +46,9 @@ public enum SecurityAction
     ImpersonationStarted = 10,
     ImpersonationEnded = 11,
     FileDownloadIssued = 12,
-    FileDownloadDenied = 13
+    FileDownloadDenied = 13,
+    ResourceGranted = 14,
+    ResourceRevoked = 15
 }
 
 /// <summary>
