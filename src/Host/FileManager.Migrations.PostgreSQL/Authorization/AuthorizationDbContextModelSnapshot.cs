@@ -38,14 +38,20 @@ partial class AuthorizationDbContextModelSnapshot : ModelSnapshot
             b.Property<bool>("IsRoot").HasColumnType("boolean");
             b.Property<string>("Name").IsRequired().HasMaxLength(256).HasColumnType("character varying(256)");
             b.Property<string>("OrganizationId").IsRequired().HasMaxLength(64).HasColumnType("character varying(64)");
+            b.Property<Guid?>("ParentId").HasColumnType("uuid");
             b.Property<Guid?>("SynchronizationId").HasColumnType("uuid");
             b.Property<string>("TenantId").IsRequired().HasColumnType("text");
             b.HasKey("Id");
+            b.HasAlternateKey("OrganizationId", "Id");
+            b.HasIndex("ParentId", "CreatedAt", "Id").HasDatabaseName("IX_Folders_ParentCursor");
             b.HasIndex("TenantId", "IsRoot")
                 .IsUnique()
                 .HasDatabaseName("UX_Folders_OneRootPerOrganization")
                 .HasFilter("\"IsRoot\" = TRUE");
-            b.ToTable("Folders", "authorization");
+            b.ToTable("Folders", "authorization", table =>
+            {
+                table.HasCheckConstraint("CK_Folders_RootParent", "(\"IsRoot\" = TRUE AND \"ParentId\" IS NULL) OR (\"IsRoot\" = FALSE AND \"ParentId\" IS NOT NULL)");
+            });
             b.HasAnnotation("Finbuckle:MultiTenant", true);
         });
 
@@ -88,6 +94,15 @@ partial class AuthorizationDbContextModelSnapshot : ModelSnapshot
             b.Property<string>("TenantId").HasMaxLength(64).HasColumnType("character varying(64)");
             b.HasKey("Id", "HandlerName");
             b.ToTable("InboxMessages", "authorization");
+        });
+
+        modelBuilder.Entity("FSH.Modules.Authorization.Domain.Folder", b =>
+        {
+            b.HasOne("FSH.Modules.Authorization.Domain.Folder", null)
+                .WithMany()
+                .HasForeignKey("OrganizationId", "ParentId")
+                .HasPrincipalKey("OrganizationId", "Id")
+                .OnDelete(DeleteBehavior.Restrict);
         });
 #pragma warning restore 612, 618
     }
