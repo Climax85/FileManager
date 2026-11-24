@@ -108,6 +108,8 @@ const GroupDetailPage = lazyNamed(
   "GroupDetailPage",
 );
 const MyFilesPage = lazyNamed(() => import("@/pages/files/my-files"), "MyFilesPage");
+const OrganizationRootPage = lazyNamed(() => import("@/pages/file-manager/root"), "OrganizationRootPage");
+const OrganizationFolderPage = lazyNamed(() => import("@/pages/file-manager/folder"), "OrganizationFolderPage");
 const ChatPage = lazyNamed(() => import("@/pages/chat/chat-page"), "ChatPage");
 
 /**
@@ -203,6 +205,8 @@ export const router = createBrowserRouter([
           { path: "system/trash", element: withSuspense(<TrashPage />) },
           { path: "system/sessions", element: withSuspense(<SessionsPage />) },
           { path: "files", element: withSuspense(<MyFilesPage />) },
+          { path: "file-manager", element: withSuspense(<OrganizationRootPage />) },
+          { path: "file-manager/folders/:folderId", element: withSuspense(<OrganizationFolderPage />) },
           { path: "chat", element: withSuspense(<ChatPage />) },
           { path: "chat/:channelId", element: withSuspense(<ChatPage />) },
           { path: "tickets", element: withSuspense(<TicketsPage />) },

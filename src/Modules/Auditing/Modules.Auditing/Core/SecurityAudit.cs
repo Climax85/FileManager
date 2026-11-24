@@ -53,4 +53,20 @@ public sealed class SecurityAudit : ISecurityAudit
                 ["targetTenant"] = targetTenantId
             },
             severity: AuditSeverity.Information, source: "Identity", ct);
+
+    public ValueTask FileDownloadIssuedAsync(string userId, Guid fileAssetId, DateTimeOffset expiresAtUtc, CancellationToken ct = default)
+        => _audit.WriteSecurityAsync(SecurityAction.FileDownloadIssued,
+            subjectId: userId, clientId: "files", authMethod: "FileAccessPolicy", reasonCode: "",
+            claims: new Dictionary<string, object?>
+            {
+                ["fileAssetId"] = fileAssetId,
+                ["expiresAt"] = expiresAtUtc
+            },
+            severity: AuditSeverity.Information, source: "Files", ct);
+
+    public ValueTask FileDownloadDeniedAsync(string userId, Guid fileAssetId, string reason, CancellationToken ct = default)
+        => _audit.WriteSecurityAsync(SecurityAction.FileDownloadDenied,
+            subjectId: userId, clientId: "files", authMethod: "FileAccessPolicy", reasonCode: reason,
+            claims: new Dictionary<string, object?> { ["fileAssetId"] = fileAssetId },
+            severity: AuditSeverity.Warning, source: "Files", ct);
 }

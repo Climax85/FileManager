@@ -21,6 +21,7 @@ import {
   type FileAssetDto,
   type VisibilityValue,
 } from "@/api/files";
+import { getOrganizationRoot } from "@/api/authorization";
 import { FileDropzone } from "@/components/file/file-dropzone";
 import { FilePreviewDialog } from "@/components/file/file-preview-dialog";
 import {
@@ -127,6 +128,11 @@ export function MyFilesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [kindFilter, setKindFilter] = useState<KindFilter>("all");
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+  const rootQuery = useQuery({
+    queryKey: ["authorization", "organization", "root"],
+    queryFn: () => getOrganizationRoot(),
+    retry: false,
+  });
 
   const myFilesQuery = useQuery({
     queryKey: MY_FILES_KEY,
@@ -191,7 +197,7 @@ export function MyFilesPage() {
         title="Files"
         total={allFiles.length}
         unit="file"
-        description="Drop images, documents, or archives. Uploads are private to you by default; flip a file to public from its preview to make it visible to the rest of the tenant under Shared."
+        description="Upload to the organization root with editor access. Every preview and download uses a short-lived authorized URL."
       />
 
       {/* Tab strip */}
@@ -221,12 +227,16 @@ export function MyFilesPage() {
           count={sharedFilesQuery.data?.length}
         />
       </div>
+      {rootQuery.isError && tab === "mine" ? (
+        <ErrorBand message="The organization root is unavailable. Uploads are disabled until your folder access can be verified." />
+      ) : null}
 
-      {tab === "mine" && (
+      {tab === "mine" && rootQuery.data && (
         <FileDropzone
           options={{
             ownerType: "MyFiles",
             ownerId: null,
+            parentFolderId: rootQuery.data.id,
             category: categoryFor,
             visibility: Visibility.Private,
             allowedExtensions: ALL_EXTENSIONS,
@@ -270,7 +280,7 @@ export function MyFilesPage() {
           <EntityEmpty
             icon={FolderOpen}
             title="No files yet"
-            body="Drop a file above to get started. Your uploads are private by default."
+            body="Drop a file above to get started. Files remain private in object storage and appear here only when you have resource access."
             action={
               <Button
                 variant="outline"
@@ -285,7 +295,7 @@ export function MyFilesPage() {
           <EntityEmpty
             icon={Share2}
             title="Nothing shared yet"
-            body="When a teammate flips one of their files to public, it shows up here for everyone in the tenant."
+            body="Files shared with you through direct or inherited resource grants appear here."
             action={
               <Button
                 variant="outline"

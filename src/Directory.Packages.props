@@ -38,6 +38,10 @@
     <PackageVersion Include="Serilog.Enrichers.Thread" Version="4.0.0" />
     <PackageVersion Include="Serilog.Sinks.OpenTelemetry" Version="4.2.0" />
   </ItemGroup>
+  <ItemGroup Label="Authorization">
+    <PackageVersion Include="Authzed.Net" Version="1.6.0" />
+    <PackageVersion Include="Grpc.Net.Client" Version="2.80.0" />
+  </ItemGroup>
   <ItemGroup>
     <PackageVersion Include="AutoFixture" Version="4.18.1" />
     <PackageVersion Include="Asp.Versioning.Http" Version="10.0.0" />

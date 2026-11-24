@@ -49,7 +49,7 @@ waf_enable_logging                = true
 
 app_s3_bucket_name        = "staging-fsh-app-bucket"
 app_s3_enable_public_read = false
-app_s3_enable_cloudfront  = true
+app_s3_enable_cloudfront  = false
 
 ################################################################################
 # Frontend SPAs (S3 + CloudFront) — bucket names must be globally unique

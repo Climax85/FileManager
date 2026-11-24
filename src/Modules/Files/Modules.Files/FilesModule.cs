@@ -1,11 +1,15 @@
 using Asp.Versioning;
 using FluentValidation;
+using FSH.Framework.Eventing;
+using FSH.Framework.Eventing.Outbox;
 using FSH.Framework.Persistence;
 using FSH.Framework.Shared.Constants;
 using FSH.Framework.Web.Modules;
 using FSH.Modules.Files.Authorization;
 using FSH.Modules.Files.Contracts;
 using FSH.Modules.Files.Contracts.Authorization;
+using FSH.Modules.Authorization.Contracts;
+using FSH.Modules.Identity.Contracts.Services;
 using FSH.Modules.Files.Data;
 using FSH.Modules.Files.Features.v1.ChangeVisibility;
 using FSH.Modules.Files.Features.v1.DeleteFile;
@@ -51,13 +55,24 @@ public sealed class FilesModule : IModule
         builder.Services.AddScoped<IDbInitializer, FilesDbInitializer>();
 
         builder.Services.AddScoped<FileAccessPolicyRegistry>();
-        builder.Services.AddSingleton<IFileScanner, NoOpFileScanner>();
+        builder.Services.AddScoped<AuthorizedFileLister>();
+        builder.Services.AddScoped<IFileScanner, ClamAvFileScanner>();
+        builder.Services.AddEventingCore(builder.Configuration);
+        builder.Services.AddEventingForDbContext<FilesDbContext>();
+        builder.Services.AddIntegrationEventHandlers(typeof(FilesModule).Assembly);
+        builder.Services.AddScoped<EfCoreOutboxStore<FilesDbContext>>();
         builder.Services.AddValidatorsFromAssembly(typeof(FilesModule).Assembly);
 
-        // Default uploader-only policies for the built-in OwnerTypes. Owning modules register their
-        // own policies for additional OwnerTypes via services.AddFileAccessPolicy<TPolicy>().
-        builder.Services.AddScoped<IFileAccessPolicy>(_ => new DefaultUploaderOnlyPolicy("MyFiles"));
-        builder.Services.AddScoped<IFileAccessPolicy>(_ => new DefaultUploaderOnlyPolicy("User"));
+        // Built-in File Manager files use only active membership + resource-graph permissions.
+        // Catalog, Tickets, Chat and other owning modules keep their specialized policies.
+        builder.Services.AddScoped<IFileAccessPolicy>(sp => new FileManagerFileAccessPolicy(
+            "MyFiles",
+            sp.GetRequiredService<IPermissionChecker>(),
+            sp.GetRequiredService<IOrganizationMembershipReader>()));
+        builder.Services.AddScoped<IFileAccessPolicy>(sp => new FileManagerFileAccessPolicy(
+            "User",
+            sp.GetRequiredService<IPermissionChecker>(),
+            sp.GetRequiredService<IOrganizationMembershipReader>()));
 
         builder.Services.AddHealthChecks().AddDbContextCheck<FilesDbContext>(
             name: "db:files",

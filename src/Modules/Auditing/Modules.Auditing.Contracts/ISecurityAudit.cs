@@ -8,4 +8,6 @@ public interface ISecurityAudit
     ValueTask TokenRevokedAsync(string userId, string clientId, string reason, CancellationToken ct = default);
     ValueTask ImpersonationStartedAsync(string actorUserId, string actorTenantId, string targetUserId, string targetTenantId, string clientId, string ip, string userAgent, string reason, CancellationToken ct = default);
     ValueTask ImpersonationEndedAsync(string actorUserId, string actorTenantId, string targetUserId, string targetTenantId, string clientId, CancellationToken ct = default);
+    ValueTask FileDownloadIssuedAsync(string userId, Guid fileAssetId, DateTimeOffset expiresAtUtc, CancellationToken ct = default);
+    ValueTask FileDownloadDeniedAsync(string userId, Guid fileAssetId, string reason, CancellationToken ct = default);
 }

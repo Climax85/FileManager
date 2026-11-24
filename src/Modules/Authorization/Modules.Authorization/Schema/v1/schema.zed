@@ -1,0 +1,50 @@
+use typechecking
+
+definition user {}
+
+definition organization {
+    relation admin: user
+    relation member: user
+}
+
+definition group {
+    relation organization: organization
+    relation member: user
+}
+
+definition organizational_unit {
+    relation organization: organization
+    relation direct_member: user
+    relation child_of: organizational_unit
+
+    permission member: user = direct_member + child_of->member
+}
+
+definition folder {
+    relation organization: organization
+    relation parent: folder
+    relation viewer: user | group#member | organization#member
+    relation viewer_unit: organizational_unit
+    relation editor: user | group#member | organization#member
+    relation editor_unit: organizational_unit
+    relation manager: user
+
+    permission view: user = organization->member & (viewer + viewer_unit->member + editor + editor_unit->member + manager + organization->admin + parent->view)
+    permission edit: user = organization->member & (editor + editor_unit->member + manager + organization->admin + parent->edit)
+    permission manage: user = organization->member & (manager + organization->admin + parent->manage)
+}
+
+definition file {
+    relation organization: organization
+    relation folder: folder
+    relation viewer: user | group#member | organization#member
+    relation viewer_unit: organizational_unit
+    relation editor: user | group#member | organization#member
+    relation editor_unit: organizational_unit
+    relation manager: user
+
+    permission view: user = organization->member & (viewer + viewer_unit->member + editor + editor_unit->member + manager + organization->admin + folder->view)
+    permission download: user = view
+    permission edit: user = organization->member & (editor + editor_unit->member + manager + organization->admin + folder->edit)
+    permission manage: user = organization->member & (manager + organization->admin + folder->manage)
+}

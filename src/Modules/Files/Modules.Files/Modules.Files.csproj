@@ -11,6 +11,10 @@
 		<ProjectReference Include="..\..\..\BuildingBlocks\Storage\Storage.csproj" />
 		<ProjectReference Include="..\..\..\BuildingBlocks\Web\Web.csproj" />
 		<ProjectReference Include="..\..\..\BuildingBlocks\Jobs\Jobs.csproj" />
+		<ProjectReference Include="..\..\..\BuildingBlocks\Eventing\Eventing.csproj" />
+		<ProjectReference Include="..\..\Authorization\Modules.Authorization.Contracts\Modules.Authorization.Contracts.csproj" />
+		<ProjectReference Include="..\..\Identity\Modules.Identity.Contracts\Modules.Identity.Contracts.csproj" />
+		<ProjectReference Include="..\..\Auditing\Modules.Auditing.Contracts\Modules.Auditing.Contracts.csproj" />
 		<ProjectReference Include="..\Modules.Files.Contracts\Modules.Files.Contracts.csproj" />
 	</ItemGroup>
 

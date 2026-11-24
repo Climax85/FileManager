@@ -93,7 +93,21 @@ services:
       - |
         mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
         mc mb --ignore-existing local/fsh
+        mc anonymous set none local/fsh
 
+
+  clamav:
+    image: clamav/clamav:stable
+    container_name: fsh-clamav
+    restart: unless-stopped
+    volumes:
+      - clamav_data:/var/lib/clamav
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/clamdcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
   migrator:
     build:
       context: ../..
@@ -124,6 +138,7 @@ services:
       minio:      { condition: service_healthy }
       minio-init: { condition: service_completed_successfully }
       migrator:   { condition: service_completed_successfully }
+      clamav:     { condition: service_healthy }
     environment:
       DOTNET_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:8080
@@ -137,6 +152,10 @@ services:
       Storage__S3__SecretKey: ${MINIO_ROOT_PASSWORD}
       Storage__S3__Bucket: fsh
       Storage__S3__ForcePathStyle: "true"
+      Storage__S3__PublicRead: "false"
+      Files__Scanner__Host: clamav
+      Files__Scanner__Port: "3310"
+      Files__Scanner__TimeoutMilliseconds: "30000"
       AllowedHosts: "*"
       HangfireOptions__UserName: ${HANGFIRE_USERNAME:?HANGFIRE_USERNAME is required}
       HangfireOptions__Password: ${HANGFIRE_PASSWORD:?HANGFIRE_PASSWORD is required}
@@ -179,3 +198,4 @@ volumes:
   pg_data:
   redis_data:
   minio_data:
+  clamav_data:

@@ -1,10 +1,14 @@
+using System.Data;
 using System.Net;
 using Finbuckle.MultiTenant.Abstractions;
 using FSH.Framework.Core.Context;
 using FSH.Framework.Core.Exceptions;
+using FSH.Framework.Eventing.Outbox;
 using FSH.Framework.Shared.Constants;
 using FSH.Framework.Shared.Multitenancy;
+using FSH.Modules.Auditing.Contracts;
 using FSH.Modules.Identity.Contracts.DTOs;
+using FSH.Modules.Identity.Contracts.Events;
 using FSH.Modules.Identity.Contracts.Services;
 using FSH.Modules.Identity.Data;
 using FSH.Modules.Identity.Domain;
@@ -19,7 +23,10 @@ internal sealed class UserRoleService(
     IdentityDbContext db,
     IMultiTenantContextAccessor<AppTenantInfo> multiTenantContextAccessor,
     ICurrentUser currentUser,
-    IUserPermissionService userPermissionService) : IUserRoleService
+    IUserPermissionService userPermissionService,
+    IAuditClient auditClient,
+    IOutboxStore outboxStore,
+    TimeProvider timeProvider) : IUserRoleService
 {
     public async Task<string> AssignRolesAsync(string userId, List<UserRoleDto> userRoles, CancellationToken cancellationToken)
     {
@@ -28,14 +35,69 @@ internal sealed class UserRoleService(
             .FirstOrDefaultAsync(cancellationToken)
             ?? throw new NotFoundException("user not found");
 
-        await ValidateAdminRoleChangeAsync(user, userRoles);
+        string organizationId = multiTenantContextAccessor.MultiTenantContext?.TenantInfo?.Id
+            ?? throw new UnauthorizedException("invalid organization");
+        bool wasAdministrator = await userManager.IsInRoleAsync(user, RoleConstants.Admin);
+        UserRoleDto? finalAdminAssignment = userRoles.LastOrDefault(
+            assignment => string.Equals(assignment.RoleName, RoleConstants.Admin, StringComparison.OrdinalIgnoreCase));
+        OrganizationAdminChange? adminChange = finalAdminAssignment switch
+        {
+            { Enabled: true } when !wasAdministrator => OrganizationAdminChange.Added,
+            { Enabled: false } when wasAdministrator => OrganizationAdminChange.Removed,
+            _ => null
+        };
 
-        var assignedRoles = await ProcessRoleAssignmentsAsync(user, userRoles);
+        // Serializable role mutations prevent two concurrent demotions from both observing
+        // another administrator and leaving the organization with none.
+        await using var transaction = await db.Database
+            .BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
+            .ConfigureAwait(false);
 
-        await RaiseRolesAssignedEventAsync(user, assignedRoles, cancellationToken);
+        if (adminChange.HasValue)
+        {
+            await ValidateAdminRoleChangeAsync(user, adminChange.Value, organizationId, cancellationToken)
+                .ConfigureAwait(false);
+        }
 
-        // Any role mutation (add or remove) invalidates the cached permission set; flush
-        // unconditionally rather than gating on assignedRoles, which only tracks additions.
+        var assignedRoles = await ProcessRoleAssignmentsAsync(user, userRoles).ConfigureAwait(false);
+        if (assignedRoles.Count > 0)
+        {
+            user.RecordRolesAssigned(assignedRoles, organizationId);
+        }
+
+        if (adminChange.HasValue)
+        {
+            var integrationEvent = new OrganizationAdminChangedIntegrationEvent(
+                Id: Guid.NewGuid(),
+                OccurredOnUtc: timeProvider.GetUtcNow().UtcDateTime,
+                TenantId: organizationId,
+                CorrelationId: System.Diagnostics.Activity.Current?.Id ?? Guid.NewGuid().ToString(),
+                Source: "Identity",
+                OrganizationId: organizationId,
+                UserId: user.Id,
+                Change: adminChange.Value);
+            await outboxStore.AddAsync(integrationEvent, cancellationToken).ConfigureAwait(false);
+        }
+
+        await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+
+        if (adminChange.HasValue)
+        {
+            // Record the committed security change even if subsequent cache invalidation fails.
+            await AuditAdminChangeAsync(
+                adminChange.Value == OrganizationAdminChange.Added
+                    ? SecurityAction.RoleAssigned
+                    : SecurityAction.RoleRevoked,
+                user.Id,
+                organizationId,
+                adminChange.Value,
+                "Succeeded",
+                AuditSeverity.Information,
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        // Any role mutation (add or remove) invalidates the cached permission set.
         await userPermissionService.InvalidatePermissionCacheAsync(userId, cancellationToken).ConfigureAwait(false);
 
         return "User Roles Updated Successfully.";
@@ -68,58 +130,90 @@ internal sealed class UserRoleService(
         return userRoles;
     }
 
-    private async Task ValidateAdminRoleChangeAsync(FshUser user, List<UserRoleDto> userRoles)
+    private async Task ValidateAdminRoleChangeAsync(
+        FshUser user,
+        OrganizationAdminChange change,
+        string organizationId,
+        CancellationToken cancellationToken)
     {
-        bool isRemovingAdminRole = userRoles.Exists(a => !a.Enabled && a.RoleName == RoleConstants.Admin);
-        if (!isRemovingAdminRole)
+        Guid actorId = currentUser.GetUserId();
+        var actor = await userManager.FindByIdAsync(actorId.ToString());
+        if (actor?.TwoFactorEnabled != true || !HasCompletedMfa())
+        {
+            await AuditAdminChangeAsync(
+                SecurityAction.PolicyFailed,
+                user.Id,
+                organizationId,
+                change,
+                "MfaRequired",
+                AuditSeverity.Warning,
+                cancellationToken).ConfigureAwait(false);
+            throw new ForbiddenException(
+                "Multi-factor authentication is required to change organization administrators.");
+        }
+
+        if (change == OrganizationAdminChange.Added)
         {
             return;
         }
 
-        bool userIsAdmin = await userManager.IsInRoleAsync(user, RoleConstants.Admin);
-        if (!userIsAdmin)
+        if (string.Equals(actorId.ToString(), user.Id, StringComparison.Ordinal))
         {
-            return;
-        }
-
-        // Administrators cannot demote themselves — they would lose access immediately on the next request,
-        // and would need another admin to restore them.
-        var actorId = currentUser.GetUserId();
-        if (actorId != Guid.Empty && string.Equals(actorId.ToString(), user.Id, StringComparison.Ordinal))
-        {
+            await AuditAdminChangeAsync(
+                SecurityAction.PolicyFailed,
+                user.Id,
+                organizationId,
+                change,
+                "SelfDemotionBlocked",
+                AuditSeverity.Warning,
+                cancellationToken).ConfigureAwait(false);
             throw new CustomException(
-                "Administrators cannot remove their own admin role.",
+                "Administrators cannot remove their own administrator role.",
                 Array.Empty<string>(),
                 HttpStatusCode.BadRequest);
         }
 
-        // The root tenant's seed admin is the framework's last-resort recovery account.
+        // This protects the framework recovery account; it does not grant the root
+        // operator access to another organization or bypass its MFA requirement.
         if (IsRootTenantAdmin(user))
         {
+            await AuditAdminChangeAsync(
+                SecurityAction.PolicyFailed,
+                user.Id,
+                organizationId,
+                change,
+                "RootAdministratorProtected",
+                AuditSeverity.Warning,
+                cancellationToken).ConfigureAwait(false);
             throw new ForbiddenException("The root tenant administrator cannot be demoted.");
         }
 
-        // After this removal, at least one admin must remain in the tenant — matches
-        // the "at least one active administrator" invariant enforced on user deactivation.
-        await EnsureMinimumAdminCountAsync();
+        int adminCount = (await userManager.GetUsersInRoleAsync(RoleConstants.Admin)).Count;
+        if (adminCount <= 1)
+        {
+            await AuditAdminChangeAsync(
+                SecurityAction.PolicyFailed,
+                user.Id,
+                organizationId,
+                change,
+                "LastAdministrator",
+                AuditSeverity.Warning,
+                cancellationToken).ConfigureAwait(false);
+            throw new CustomException(
+                "Organization must retain at least one administrator.",
+                Array.Empty<string>(),
+                HttpStatusCode.BadRequest);
+        }
     }
+
+    private bool HasCompletedMfa()
+        => currentUser.GetUserClaims()?.Any(
+            claim => claim.Type == "amr" && claim.Value == "mfa") is true;
 
     private bool IsRootTenantAdmin(FshUser user)
     {
         return user.Email == MultitenancyConstants.Root.EmailAddress
-            && multiTenantContextAccessor?.MultiTenantContext?.TenantInfo?.Id == MultitenancyConstants.Root.Id;
-    }
-
-    private async Task EnsureMinimumAdminCountAsync()
-    {
-        int adminCount = (await userManager.GetUsersInRoleAsync(RoleConstants.Admin)).Count;
-        if (adminCount <= 1)
-        {
-            throw new CustomException(
-                "Tenant must retain at least one administrator.",
-                Array.Empty<string>(),
-                HttpStatusCode.BadRequest);
-        }
+            && multiTenantContextAccessor.MultiTenantContext?.TenantInfo?.Id == MultitenancyConstants.Root.Id;
     }
 
     private async Task<List<string>> ProcessRoleAssignmentsAsync(FshUser user, List<UserRoleDto> userRoles)
@@ -133,32 +227,60 @@ internal sealed class UserRoleService(
                 continue;
             }
 
-            if (userRole.Enabled)
+            bool isAssigned = await userManager.IsInRoleAsync(user, userRole.RoleName!);
+            if (userRole.Enabled && !isAssigned)
             {
-                if (!await userManager.IsInRoleAsync(user, userRole.RoleName!))
-                {
-                    await userManager.AddToRoleAsync(user, userRole.RoleName!);
-                    assignedRoles.Add(userRole.RoleName!);
-                }
+                IdentityResult result = await userManager.AddToRoleAsync(user, userRole.RoleName!);
+                EnsureSucceeded(result, "Assign role failed");
+                assignedRoles.Add(userRole.RoleName!);
             }
-            else
+            else if (!userRole.Enabled && isAssigned)
             {
-                await userManager.RemoveFromRoleAsync(user, userRole.RoleName!);
+                IdentityResult result = await userManager.RemoveFromRoleAsync(user, userRole.RoleName!);
+                EnsureSucceeded(result, "Remove role failed");
             }
         }
 
         return assignedRoles;
     }
 
-    private async Task RaiseRolesAssignedEventAsync(FshUser user, List<string> assignedRoles, CancellationToken cancellationToken)
+    private static void EnsureSucceeded(IdentityResult result, string message)
     {
-        if (assignedRoles.Count == 0)
+        if (!result.Succeeded)
         {
-            return;
+            throw new CustomException(
+                message,
+                result.Errors.Select(error => error.Description).ToList(),
+                HttpStatusCode.BadRequest);
         }
+    }
 
-        var tenantId = multiTenantContextAccessor?.MultiTenantContext?.TenantInfo?.Id;
-        user.RecordRolesAssigned(assignedRoles, tenantId);
-        await db.SaveChangesAsync(cancellationToken);
+    private async Task AuditAdminChangeAsync(
+        SecurityAction action,
+        string targetUserId,
+        string organizationId,
+        OrganizationAdminChange change,
+        string reasonCode,
+        AuditSeverity severity,
+        CancellationToken cancellationToken)
+    {
+        string actorId = currentUser.GetUserId().ToString();
+        var claims = new Dictionary<string, object?>
+        {
+            ["actorId"] = actorId,
+            ["targetUserId"] = targetUserId,
+            ["organizationId"] = organizationId,
+            ["change"] = change.ToString()
+        };
+
+        await auditClient.WriteSecurityAsync(
+            action,
+            subjectId: actorId,
+            authMethod: HasCompletedMfa() ? "MFA" : "Password",
+            reasonCode: reasonCode,
+            claims: claims,
+            severity: severity,
+            source: "Identity",
+            ct: cancellationToken).ConfigureAwait(false);
     }
 }

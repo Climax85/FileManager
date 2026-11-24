@@ -54,7 +54,7 @@ waf_enable_logging                = true
 app_s3_bucket_name                = "prod-fsh-app-bucket"
 app_s3_versioning_enabled         = true
 app_s3_enable_public_read         = false
-app_s3_enable_cloudfront          = true
+app_s3_enable_cloudfront          = false
 app_s3_cloudfront_price_class     = "PriceClass_200"
 app_s3_enable_intelligent_tiering = true
 

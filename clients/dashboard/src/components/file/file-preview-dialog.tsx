@@ -25,8 +25,9 @@ import { Button } from "@/components/ui/button";
 import { ErrorBand } from "@/components/list";
 import { Switch } from "@/components/ui/switch";
 import {
-  FileAssetStatus,
   Visibility,
+  FileAssetStatus,
+  FileScanStatus,
   changeFileVisibility,
   deleteFile,
   getFileDownloadUrl,
@@ -61,8 +62,8 @@ type Props = {
  *   - text/* (small) → fetched + rendered as <pre>
  *   - everything else → a download CTA
  *
- * For private files, the URL is minted on demand via /url; public files use the
- * durable publicUrl shipped on the metadata DTO.
+ * Every preview uses a fresh authorized URL. Public visibility is metadata only and
+ * never selects the legacy publicUrl bypass.
  */
 export function FilePreviewDialog({ fileAssetId, initial, onClose, onDeleted }: Props) {
   const open = fileAssetId !== null;
@@ -91,8 +92,7 @@ export function FilePreviewDialog({ fileAssetId, initial, onClose, onDeleted }: 
     },
   });
 
-  // Re-fetch metadata each open: the list may be stale w.r.t. status/visibility, and
-  // the publicUrl/presigned URL must be current for inline rendering.
+  // Re-fetch metadata each open: list data may be stale with respect to status or scan state.
   const metaQuery = useQuery({
     queryKey: ["files", "meta", fileAssetId],
     queryFn: () => getFileMetadata(fileAssetId!),
@@ -107,7 +107,7 @@ export function FilePreviewDialog({ fileAssetId, initial, onClose, onDeleted }: 
       metaQuery.refetch();
       toast.success(
         dto.visibility === Visibility.Public
-          ? "File is now public to your tenant"
+          ? "File is now listed as shared"
           : "File is now private",
       );
     },
@@ -128,17 +128,15 @@ export function FilePreviewDialog({ fileAssetId, initial, onClose, onDeleted }: 
     !!user?.id &&
     metaQuery.data.createdByUserId === user.id;
 
-  // Private files need a presigned GET to render — fetch lazily once we know visibility.
-  // Ask for ?inline=true so the URL carries Content-Disposition: inline, letting the
-  // browser PDF viewer / image renderer show the file in place instead of downloading.
-  //
-  // staleTime: 0 + gcTime: 0 force a fresh URL on every modal open. The presigned URL has
-  // a TTL of its own (see Files:DownloadUrlTtlMinutes); reusing a cached URL from a previous
-  // open across sessions risks serving an expired URL that the <img> fails on silently.
+  // Mint a fresh inline URL for every visibility value, but only after upload + malware
+  // scanning have both succeeded. staleTime/gcTime zero prevent credential reuse across opens.
+  const isDeliverable =
+    metaQuery.data?.status === FileAssetStatus.Available &&
+    metaQuery.data.scanStatus === FileScanStatus.Clean;
   const downloadQuery = useQuery({
     queryKey: ["files", "download", fileAssetId, "inline"],
     queryFn: () => getFileDownloadUrl(fileAssetId!, { inline: true }),
-    enabled: open && metaQuery.data?.visibility === Visibility.Private,
+    enabled: open && isDeliverable,
     staleTime: 0,
     gcTime: 0,
   });
@@ -171,11 +169,15 @@ export function FilePreviewDialog({ fileAssetId, initial, onClose, onDeleted }: 
             <PreviewSkeleton />
           ) : (
             <>
-              <Preview
-                file={metaQuery.data}
-                downloadUrl={downloadQuery.data?.url}
-                onUrlError={() => void downloadQuery.refetch()}
-              />
+              {downloadQuery.isError ? (
+                <ErrorBand message="Authorized preview is unavailable. The file may be unsafe, incomplete, deleted, or no longer shared with you." />
+              ) : (
+                <Preview
+                  file={metaQuery.data}
+                  downloadUrl={downloadQuery.data?.url}
+                  onUrlError={() => void downloadQuery.refetch()}
+                />
+              )}
               <MetadataPanel
                 file={metaQuery.data}
                 isUploader={isUploader}
@@ -237,7 +239,7 @@ export function FilePreviewDialog({ fileAssetId, initial, onClose, onDeleted }: 
 
           {/* Right cluster — primary actions */}
           <div className="flex items-center gap-2">
-            {metaQuery.data && metaQuery.data.status === FileAssetStatus.Available && (
+            {isDeliverable && !downloadQuery.isError && metaQuery.data && (
               <DownloadButton file={metaQuery.data} />
             )}
             <DialogClose asChild>
@@ -259,9 +261,9 @@ function Preview({
   downloadUrl?: string;
   onUrlError: () => void;
 }) {
-  // For private files we need the presigned URL; for public we use the durable URL.
-  const url = file.publicUrl ?? downloadUrl ?? null;
-  const isAvailable = file.status === FileAssetStatus.Available;
+  const url = downloadUrl ?? null;
+  const isAvailable =
+    file.status === FileAssetStatus.Available && file.scanStatus === FileScanStatus.Clean;
   const [errored, setErrored] = useState(false);
 
   if (!isAvailable) {
@@ -270,7 +272,7 @@ function Preview({
         <p className="text-sm text-[var(--color-muted-foreground)]">
           {file.status === FileAssetStatus.PendingUpload
             ? "Upload not yet finalized."
-            : "This file is quarantined and cannot be previewed."}
+            : "This file is quarantined or has not passed malware scanning and cannot be previewed."}
         </p>
       </div>
     );
@@ -409,16 +411,16 @@ function MetadataPanel({
   ];
 
   const isPublic = file.visibility === Visibility.Public;
+  const isFileManager = file.ownerType === "MyFiles" || file.ownerType === "User";
 
   return (
     <div className="space-y-3 rounded-xl border border-border bg-[var(--color-muted)] p-4">
-      {/* Visibility row — switch when the caller is the uploader, static label
-          otherwise. Public state gets a small "visible to the tenant" hint so
-          the consequence is clear before flipping. */}
+      {/* Specialized owner types retain their legacy visibility controls. File Manager
+          access is always resource-grant based and never changed by this metadata bit. */}
       <div className="flex items-start justify-between gap-3 border-b border-[oklch(from_var(--color-border)_l_c_h_/_0.5)] pb-3">
         <div>
           <dt className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
-            Visibility
+            {isFileManager ? "Access" : "Visibility"}
           </dt>
           <dd
             className={cn(
@@ -426,15 +428,17 @@ function MetadataPanel({
               isPublic ? "text-[var(--color-primary)]" : "text-[var(--color-foreground)]",
             )}
           >
-            {isPublic ? "Public" : "Private"}
+            {isFileManager ? "Resource authorized" : isPublic ? "Public" : "Private"}
           </dd>
           <p className="mt-0.5 text-[11px] text-[var(--color-muted-foreground)]">
-            {isPublic
-              ? "Everyone in your tenant can find this file under Shared."
-              : "Only you can preview or download this file."}
+            {isFileManager
+              ? "Only direct or inherited resource grants permit preview and download."
+              : isPublic
+                ? "Everyone in your tenant can find this file under Shared."
+                : "Only you can preview or download this file."}
           </p>
         </div>
-        {isUploader ? (
+        {!isFileManager && isUploader ? (
           <Switch
             checked={isPublic}
             onCheckedChange={(checked) =>
@@ -443,11 +447,11 @@ function MetadataPanel({
             disabled={visibilityPending}
             aria-label="Toggle public visibility"
           />
-        ) : (
+        ) : !isFileManager ? (
           <span className="text-[10.5px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
             Read-only
           </span>
-        )}
+        ) : null}
       </div>
 
       <dl className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
@@ -466,22 +470,22 @@ function MetadataPanel({
   );
 }
 
-// Click-to-download. Mints a fresh attachment-disposition presigned URL each click for
-// private files so we don't reuse the inline URL the iframe is consuming. For public
-// files there's no inline/attachment distinction — both buttons use the same publicUrl.
+// Click-to-download always mints a fresh attachment-disposition URL. No visibility value
+// or legacy publicUrl is allowed to bypass that authorization check.
 function DownloadButton({ file }: { file: FileAssetDto }) {
   const [busy, setBusy] = useState(false);
   const handle = async () => {
     if (busy) return;
     setBusy(true);
     try {
-      const url = file.visibility === Visibility.Public && file.publicUrl
-        ? file.publicUrl
-        : (await getFileDownloadUrl(file.id, { inline: false })).url;
-      // Triggering navigation in a new tab; the response carries
-      // Content-Disposition: attachment for private files, so the browser saves rather
-      // than navigates. For public files we just open in a new tab.
+      const url = (await getFileDownloadUrl(file.id, { inline: false })).url;
       window.open(url, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      const detail =
+        err instanceof ApiRequestError
+          ? (err.problem?.detail ?? err.problem?.title ?? err.message)
+          : (err as Error).message;
+      toast.error("Download failed", { description: detail });
     } finally {
       setBusy(false);
     }

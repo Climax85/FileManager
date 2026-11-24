@@ -621,7 +621,7 @@ module "api_service" {
       CachingOptions__Redis      = module.redis.connection_string
       Storage__Provider          = "s3"
       Storage__S3__Bucket        = var.app_s3_bucket_name
-      Storage__S3__PublicBaseUrl = module.app_s3.cloudfront_domain_name != "" ? "https://${module.app_s3.cloudfront_domain_name}" : ""
+      Storage__S3__PublicRead     = "false"
       OriginOptions__OriginUrl   = local.api_origin
       # Hangfire dashboard user (password arrives via `secrets` below). Both are
       # [Required] + ValidateOnStart, so the API won't boot without them.

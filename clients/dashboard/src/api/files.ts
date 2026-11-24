@@ -17,6 +17,14 @@ export const FileAssetStatus = {
 } as const;
 export type FileAssetStatusValue = (typeof FileAssetStatus)[keyof typeof FileAssetStatus];
 
+// Mirrors FSH.Modules.Files.Domain.ScanStatus.
+export const FileScanStatus = {
+  NotScanned: 0,
+  Clean: 1,
+  Infected: 2,
+  ScanFailed: 3,
+} as const;
+
 // Mirrors FSH.Modules.Files.Contracts.v1.DTOs.FileAssetDto.
 export type FileAssetDto = {
   id: string;
@@ -36,6 +44,7 @@ export type FileAssetDto = {
   createdByUserId: string;
   deletedOnUtc?: string | null;
   deletedBy?: string | null;
+  parentFolderId?: string | null;
 };
 
 export type PresignedUploadResponse = {
@@ -58,6 +67,7 @@ export type RequestUploadUrlInput = {
   sizeBytes: number;
   visibility: VisibilityValue;
   category: string;
+  parentFolderId?: string;
 };
 
 export function requestUploadUrl(input: RequestUploadUrlInput): Promise<PresignedUploadResponse> {

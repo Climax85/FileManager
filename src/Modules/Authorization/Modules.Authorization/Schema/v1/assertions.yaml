@@ -1,0 +1,83 @@
+relationships: |
+  organization:acme#admin@user:alice
+  organization:acme#member@user:alice
+  organization:acme#member@user:bob
+  organization:acme#member@user:carol
+  organization:acme#member@user:dan
+  organization:acme#member@user:frank
+  organization:other#admin@user:eve
+  organization:other#member@user:eve
+  folder:acme-root#organization@organization:acme
+  folder:acme-root#manager@user:alice
+  folder:acme-root#viewer@user:carol
+  folder:acme-root#viewer@group:acme-team#member
+  folder:acme-child#organization@organization:acme
+  folder:acme-child#parent@folder:acme-root
+  folder:acme-child#editor@user:dan
+  folder:other-root#organization@organization:other
+  folder:other-root#manager@user:eve
+  file:acme-file#organization@organization:acme
+  file:acme-file#folder@folder:acme-child
+  group:acme-team#organization@organization:acme
+  group:acme-team#member@user:bob
+  organizational_unit:acme-parent#organization@organization:acme
+  organizational_unit:acme-parent#direct_member@user:carol
+  organizational_unit:acme-child#organization@organization:acme
+  organizational_unit:acme-child#child_of@organizational_unit:acme-parent
+  organizational_unit:acme-child#direct_member@user:dan
+  folder:acme-unit-shared#organization@organization:acme
+  folder:acme-unit-shared#viewer_unit@organizational_unit:acme-parent
+  folder:acme-org-shared#organization@organization:acme
+  folder:acme-org-shared#viewer@organization:acme#member
+  folder:acme-depth-1#organization@organization:acme
+  folder:acme-depth-1#parent@folder:acme-root
+  folder:acme-depth-1#viewer@user:frank
+  folder:acme-depth-2#organization@organization:acme
+  folder:acme-depth-2#parent@folder:acme-depth-1
+  folder:acme-depth-2#editor@user:bob
+  folder:acme-depth-3#organization@organization:acme
+  folder:acme-depth-3#parent@folder:acme-depth-2
+  folder:acme-depth-3#manager@user:dan
+  folder:acme-depth-4#organization@organization:acme
+  folder:acme-depth-4#parent@folder:acme-depth-3
+
+assertions:
+  assertTrue:
+    - "folder:acme-root#view@user:alice"
+    - "folder:acme-root#edit@user:alice"
+    - "folder:acme-root#manage@user:alice"
+    - "folder:acme-root#view@user:carol"
+    - "folder:acme-root#view@user:bob"
+    - "folder:acme-unit-shared#view@user:carol"
+    - "folder:acme-unit-shared#view@user:dan"
+    - "folder:acme-org-shared#view@user:bob"
+    - "folder:acme-child#view@user:alice"
+    - "folder:acme-child#manage@user:alice"
+    - "folder:acme-child#edit@user:dan"
+    - "folder:acme-child#view@user:dan"
+    - "file:acme-file#view@user:alice"
+    - "file:acme-file#download@user:alice"
+    - "file:acme-file#edit@user:dan"
+    - "folder:other-root#manage@user:eve"
+    - "folder:acme-depth-4#view@user:frank"
+    - "folder:acme-depth-4#view@user:bob"
+    - "folder:acme-depth-4#edit@user:bob"
+    - "folder:acme-depth-4#view@user:dan"
+    - "folder:acme-depth-4#edit@user:dan"
+    - "folder:acme-depth-4#manage@user:dan"
+  assertFalse:
+    - "folder:acme-root#view@user:frank"
+    - "folder:acme-unit-shared#view@user:bob"
+    - "folder:acme-org-shared#view@user:eve"
+    - "folder:acme-org-shared#edit@user:bob"
+    - "folder:acme-root#edit@user:carol"
+    - "folder:acme-root#manage@user:carol"
+    - "folder:acme-child#manage@user:dan"
+    - "folder:other-root#view@user:alice"
+    - "folder:other-root#manage@user:alice"
+    - "folder:acme-root#view@user:eve"
+    - "file:acme-file#manage@user:dan"
+    - "folder:acme-depth-4#edit@user:frank"
+    - "folder:acme-depth-4#manage@user:frank"
+    - "folder:acme-depth-4#manage@user:bob"
+    - "folder:acme-depth-4#view@user:eve"

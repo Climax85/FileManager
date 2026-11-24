@@ -1,9 +1,13 @@
 using System.Net;
 using FSH.Framework.Core.Context;
 using FSH.Framework.Core.Exceptions;
+using FSH.Framework.Eventing.Outbox;
 using FSH.Framework.Quota;
 using FSH.Framework.Shared.Quota;
+using FSH.Framework.Shared.Storage;
 using FSH.Framework.Storage.Services;
+using FSH.Modules.Authorization.Contracts;
+using FSH.Modules.Authorization.Contracts.Events;
 using FSH.Modules.Files.Contracts;
 using FSH.Modules.Files.Contracts.v1.Commands;
 using FSH.Modules.Files.Contracts.v1.DTOs;
@@ -11,6 +15,7 @@ using FSH.Modules.Files.Data;
 using FSH.Modules.Files.Domain;
 using FSH.Modules.Files.Services;
 using Mediator;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace FSH.Modules.Files.Features.v1.RequestUploadUrl;
@@ -21,6 +26,11 @@ public sealed class RequestUploadUrlCommandHandler(
     FileAccessPolicyRegistry policies,
     IQuotaService quotas,
     ICurrentUser currentUser,
+    IOrganizationRootProvisioner roots,
+    IPermissionChecker permissionChecker,
+    IRelationshipWriter relationshipWriter,
+    EfCoreOutboxStore<FilesDbContext> outbox,
+    TimeProvider timeProvider,
     IOptions<FilesOptions> options)
     : ICommandHandler<RequestUploadUrlCommand, PresignedUploadResponse>
 {
@@ -28,20 +38,19 @@ public sealed class RequestUploadUrlCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(cmd);
 
-        var tenantId = currentUser.GetTenant() ?? throw new UnauthorizedException("invalid tenant");
-        var userId = currentUser.GetUserId();
+        string tenantId = currentUser.GetTenant() ?? throw new UnauthorizedException("invalid tenant");
+        Guid userId = currentUser.GetUserId();
         if (userId == Guid.Empty)
         {
             throw new UnauthorizedException("no current user");
         }
 
-        // Category lookup + extension/size validation.
-        if (!options.Value.Categories.TryGetValue(cmd.Category, out var category))
+        if (!options.Value.Categories.TryGetValue(cmd.Category, out FileCategoryOptions? category))
         {
             throw new CustomException($"Unknown category '{cmd.Category}'.", (IEnumerable<string>?)null, HttpStatusCode.BadRequest);
         }
 
-        var extension = Path.GetExtension(cmd.FileName);
+        string extension = Path.GetExtension(cmd.FileName);
         if (string.IsNullOrWhiteSpace(extension) ||
             !category.AllowedExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase))
         {
@@ -59,16 +68,34 @@ public sealed class RequestUploadUrlCommandHandler(
                 HttpStatusCode.BadRequest);
         }
 
-        // Authorization: policy must exist and allow the attach.
-        var policy = policies.Resolve(cmd.OwnerType)
+        bool isFileManager = cmd.OwnerType is "MyFiles" or "User";
+        Guid? parentFolderId = null;
+        if (isFileManager)
+        {
+            OrganizationRoot root = await roots.EnsureRootAsync(new OrganizationId(tenantId), cancellationToken).ConfigureAwait(false);
+            parentFolderId = cmd.ParentFolderId ?? root.Id.Value;
+            AuthorizationConsistency consistency = parentFolderId == root.Id.Value && root.AuthorizationToken is AuthorizationToken rootToken
+                ? AuthorizationConsistency.AtLeastAsFresh(rootToken)
+                : AuthorizationConsistency.MinimizeLatency();
+            PermissionCheckResult parentAccess = await permissionChecker.CheckAsync(new PermissionCheck(
+                new UserId(userId.ToString("D")),
+                AuthorizationObjects.For(new FolderId(parentFolderId.Value)),
+                AuthorizationPermission.Edit,
+                consistency), cancellationToken).ConfigureAwait(false);
+            if (!parentAccess.IsAllowed)
+            {
+                throw new ForbiddenException("Editor access to the parent folder is required.");
+            }
+        }
+
+        IFileAccessPolicy policy = policies.Resolve(cmd.OwnerType)
             ?? throw new ForbiddenException($"No file access policy registered for owner type '{cmd.OwnerType}'.");
         if (!await policy.CanAttachAsync(cmd.OwnerId, userId.ToString(), cancellationToken).ConfigureAwait(false))
         {
             throw new ForbiddenException("Not allowed to attach files to this owner.");
         }
 
-        // Quota pre-check (no debit yet — debit happens on finalize with actual bytes).
-        var quotaCheck = await quotas.CheckAsync(tenantId, QuotaResource.StorageBytes, cmd.SizeBytes, cancellationToken).ConfigureAwait(false);
+        QuotaCheckResult quotaCheck = await quotas.CheckAsync(tenantId, QuotaResource.StorageBytes, cmd.SizeBytes, cancellationToken).ConfigureAwait(false);
         if (!quotaCheck.Allowed)
         {
             throw new CustomException(
@@ -77,13 +104,13 @@ public sealed class RequestUploadUrlCommandHandler(
                 (HttpStatusCode)507);
         }
 
-        // Generate id + storage key + presigned URL.
-        var id = Guid.CreateVersion7();
-        var storageKey = StorageKeyBuilder.Build(tenantId, cmd.OwnerType, id, cmd.FileName, DateTimeOffset.UtcNow);
-        var ttl = TimeSpan.FromMinutes(options.Value.UploadUrlTtlMinutes);
-        var presigned = await storage.GenerateUploadUrlAsync(storageKey, cmd.ContentType, category.MaxBytes, ttl, cancellationToken).ConfigureAwait(false);
-
-        var asset = FileAsset.CreatePending(
+        Guid id = Guid.CreateVersion7();
+        Guid? operationId = isFileManager ? Guid.CreateVersion7() : null;
+        DateTimeOffset now = timeProvider.GetUtcNow();
+        string storageKey = StorageKeyBuilder.Build(tenantId, cmd.OwnerType, id, cmd.FileName, now);
+        TimeSpan ttl = TimeSpan.FromMinutes(options.Value.UploadUrlTtlMinutes);
+        PresignedUploadUrl presigned = await storage.GenerateUploadUrlAsync(storageKey, cmd.ContentType, cmd.SizeBytes, ttl, cancellationToken).ConfigureAwait(false);
+        FileAsset asset = FileAsset.CreatePending(
             id: id,
             ownerType: cmd.OwnerType,
             ownerId: cmd.OwnerId,
@@ -94,11 +121,88 @@ public sealed class RequestUploadUrlCommandHandler(
             storageKey: storageKey,
             visibility: cmd.Visibility,
             createdByUserId: userId.ToString(),
-            uploadDeadline: DateTimeOffset.UtcNow.Add(ttl));
+            uploadDeadline: now.Add(ttl),
+            parentFolderId: parentFolderId,
+            authorizationOperationId: operationId);
 
+        IReadOnlyCollection<RelationshipMutation>? mutations = isFileManager
+            ? CreatorMutations(tenantId, parentFolderId!.Value, id, userId)
+            : null;
         db.FileAssets.Add(asset);
-        await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        if (operationId is Guid confirmedOperationId && mutations is not null)
+        {
+            await using (var transaction = await db.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false))
+            {
+                await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+                await outbox.AddAsync(new AuthorizationRelationshipsChangedIntegrationEvent(
+                    confirmedOperationId,
+                    now.UtcDateTime,
+                    tenantId,
+                    confirmedOperationId.ToString("D"),
+                    "Files",
+                    mutations), cancellationToken).ConfigureAwait(false);
+                await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            await ConfirmProjectionAsync(asset, mutations, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
 
         return new PresignedUploadResponse(asset.Id, presigned.Url, presigned.RequiredHeaders, presigned.ExpiresAt);
+    }
+
+    private async ValueTask ConfirmProjectionAsync(
+        FileAsset asset,
+        IReadOnlyCollection<RelationshipMutation> mutations,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            RelationshipConfirmation confirmation = await relationshipWriter
+                .WriteAsync(asset.AuthorizationOperationId!.Value, mutations, cancellationToken)
+                .ConfigureAwait(false);
+            asset.MarkAuthorizationConfirmed(confirmation.WrittenAt.Value, confirmation.ConfirmedAt);
+            OutboxMessage? message = await db.OutboxMessages
+                .SingleOrDefaultAsync(x => x.Id == asset.AuthorizationOperationId.Value, cancellationToken)
+                .ConfigureAwait(false);
+            if (message is not null)
+            {
+                message.ProcessedOnUtc = confirmation.ConfirmedAt.UtcDateTime;
+            }
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            asset.MarkAuthorizationFailed(exception.Message);
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    private static IReadOnlyCollection<RelationshipMutation> CreatorMutations(
+        string tenantId,
+        Guid parentFolderId,
+        Guid fileId,
+        Guid creatorId)
+    {
+        AuthorizationObject file = AuthorizationObjects.For(new FileId(fileId));
+        return
+        [
+            RelationshipMutation.Touch(
+                file,
+                AuthorizationRelation.Organization,
+                new AuthorizationSubject(AuthorizationObjects.For(new OrganizationId(tenantId)))),
+            RelationshipMutation.Touch(
+                file,
+                AuthorizationRelation.Folder,
+                new AuthorizationSubject(AuthorizationObjects.For(new FolderId(parentFolderId)))),
+            RelationshipMutation.Touch(
+                file,
+                AuthorizationRelation.Manager,
+                AuthorizationSubjects.For(new UserId(creatorId.ToString("D")))),
+        ];
     }
 }

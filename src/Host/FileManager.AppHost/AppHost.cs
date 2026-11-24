@@ -20,6 +20,29 @@ var postgresServer = builder.AddPostgres("postgres")
 
 var postgres = postgresServer.AddDatabase("fsh-db");
 
+// SpiceDB uses its own PostgreSQL server, database, and credentials so authorization data
+// cannot be read or modified through the application's database connection.
+var spiceDbPostgresUser = builder.AddParameter("spicedb-postgres-user", "spicedb");
+var spiceDbPostgresPassword = builder.AddParameter("spicedb-postgres-password", "spicedb-dev-password", secret: true);
+var spiceDbKey = builder.AddParameter("spicedb-preshared-key", "development-only-spicedb-key", secret: true);
+var spiceDbPostgresServer = builder.AddPostgres("spicedb-postgres", spiceDbPostgresUser, spiceDbPostgresPassword)
+    .WithDataVolume($"{appPrefix}-spicedb-postgres-data")
+    .WithLifetime(ContainerLifetime.Persistent);
+var spiceDbPostgres = spiceDbPostgresServer.AddDatabase("spicedb-db");
+var spiceDbPostgresEndpoint = spiceDbPostgresServer.GetEndpoint("tcp");
+var spiceDbConnection = ReferenceExpression.Create(
+    $"postgres://{spiceDbPostgresUser}:{spiceDbPostgresPassword}@{spiceDbPostgresEndpoint.Property(EndpointProperty.HostAndPort)}/spicedb-db?sslmode=disable");
+var spiceDbMigrate = builder.AddContainer("spicedb-migrate", "authzed/spicedb", "v1.57.1")
+    .WithArgs("migrate", "head", "--datastore-engine", "postgres", "--datastore-conn-uri", spiceDbConnection)
+    .WaitFor(spiceDbPostgres);
+var spiceDb = builder.AddContainer("spicedb", "authzed/spicedb", "v1.57.1")
+    .WithArgs("serve", "--grpc-preshared-key", spiceDbKey, "--datastore-engine", "postgres", "--datastore-conn-uri", spiceDbConnection)
+    .WithEndpoint(targetPort: 50051, scheme: "tcp", name: "grpc")
+    .WithLifetime(ContainerLifetime.Persistent)
+    .WaitForCompletion(spiceDbMigrate);
+var spiceDbEndpoint = spiceDb.GetEndpoint("grpc");
+var spiceDbAddress = ReferenceExpression.Create($"http://{spiceDbEndpoint.Property(EndpointProperty.HostAndPort)}");
+
 // Warm pooled-connection floor for the long-running API — Npgsql's default Minimum Pool Size of 0 lets the pool drain to cold, so /health/ready's ~10 concurrent DbContext checks cold-open a cohort at once and intermittently stall the probe; a floor keeps connections warm for reuse.
 var apiPgConnection = ReferenceExpression.Create(
     $"{postgres.Resource.ConnectionStringExpression};Minimum Pool Size=5");
@@ -62,14 +85,20 @@ var minio = builder.AddContainer("minio", "minio/minio")
     .WithVolume($"{appPrefix}-minio-data", "/data")
     .WithLifetime(ContainerLifetime.Persistent);
 
-// Init container: bucket bootstrap (create + public-read). Script normalized to LF so /bin/sh in minio/mc doesn't choke on Windows CRLF.
+// Real ClamAV scanner. Files scans fail closed when this service is unavailable or not ready.
+var clamAv = builder.AddContainer("clamav", "clamav/clamav", "stable")
+    .WithEndpoint(targetPort: 3310, scheme: "tcp", name: "tcp")
+    .WithVolume($"{appPrefix}-clamav-data", "/var/lib/clamav")
+    .WithLifetime(ContainerLifetime.Persistent);
+
+// Init container: private bucket bootstrap. Downloads always use short-lived SigV4 URLs.
 var minioInitScript = ($$"""
 until mc alias set local http://minio:9000 "$MC_USER" "$MC_PASS"; do
   echo "waiting for minio...";
   sleep 2;
 done;
 mc mb --ignore-existing local/{{MinioBucket}};
-mc anonymous set download local/{{MinioBucket}};
+mc anonymous set none local/{{MinioBucket}};
 """).ReplaceLineEndings("\n");
 
 var minioInit = builder.AddContainer("minio-init", "minio/mc")
@@ -86,6 +115,10 @@ var migrator = builder.AddProject<Projects.FileManager_DbMigrator>($"{appPrefix}
     .WithReference(postgres)
     .WaitFor(postgres)
     .WithEnvironment("DatabaseOptions__Provider", "POSTGRESQL")
+    .WaitFor(spiceDb)
+    .WithEnvironment("Authorization__SpiceDB__Endpoint", spiceDbAddress)
+    .WithEnvironment("Authorization__SpiceDB__PresharedKey", spiceDbKey)
+    .WithEnvironment("Authorization__SpiceDB__UseTls", "false")
     .WithEnvironment("DatabaseOptions__ConnectionString", postgres.Resource.ConnectionStringExpression)
     .WithEnvironment("DatabaseOptions__MigrationsAssembly", "FileManager.Migrations.PostgreSQL")
     .WithEnvironment("Seed__DefaultAdminPassword", "123Pa$$word!")
@@ -97,6 +130,10 @@ var demoSeeder = builder.AddProject<Projects.FileManager_DbMigrator>($"{appPrefi
     .WaitFor(postgres)
     .WaitForCompletion(migrator)
     .WithEnvironment("DOTNET_ENVIRONMENT", "Development")
+    .WaitFor(spiceDb)
+    .WithEnvironment("Authorization__SpiceDB__Endpoint", spiceDbAddress)
+    .WithEnvironment("Authorization__SpiceDB__PresharedKey", spiceDbKey)
+    .WithEnvironment("Authorization__SpiceDB__UseTls", "false")
     .WithEnvironment("DatabaseOptions__Provider", "POSTGRESQL")
     .WithEnvironment("DatabaseOptions__ConnectionString", postgres.Resource.ConnectionStringExpression)
     .WithEnvironment("DatabaseOptions__MigrationsAssembly", "FileManager.Migrations.PostgreSQL")
@@ -109,8 +146,13 @@ var api = builder.AddProject<Projects.FileManager_Api>($"{appPrefix}-api")
     .WaitFor(postgres)
     .WaitFor(redis)
     .WaitForCompletion(minioInit)
+    .WaitFor(spiceDb)
+    .WithEnvironment("Authorization__SpiceDB__Endpoint", spiceDbAddress)
+    .WithEnvironment("Authorization__SpiceDB__PresharedKey", spiceDbKey)
+    .WithEnvironment("Authorization__SpiceDB__UseTls", "false")
     .WaitForCompletion(migrator)
     .WaitForCompletion(demoSeeder)
+    .WaitFor(clamAv)
     .WithExternalHttpEndpoints()
     .WithEnvironment("DatabaseOptions__Provider", "POSTGRESQL")
     .WithEnvironment("DatabaseOptions__ConnectionString", apiPgConnection)
@@ -135,7 +177,9 @@ var api = builder.AddProject<Projects.FileManager_Api>($"{appPrefix}-api")
     .WithEnvironment("Storage__S3__AccessKey", minioUser)
     .WithEnvironment("Storage__S3__SecretKey", minioPassword)
     .WithEnvironment("Storage__S3__ForcePathStyle", "true")
-    .WithEnvironment("Storage__S3__PublicBaseUrl", ReferenceExpression.Create($"{minioApiEndpoint}/{MinioBucket}"));
+    .WithEnvironment("Storage__S3__PublicRead", "false")
+    .WithEnvironment("Files__Scanner__Host", "clamav")
+    .WithEnvironment("Files__Scanner__Port", "3310");
 
 // Admin console (React + Vite). Target the API's HTTPS endpoint directly — UseHttpsRedirection's 307 to https is cross-origin and strips the Authorization header.
 builder.AddJavaScriptApp($"{appPrefix}-admin", "../../../clients/admin", "dev")

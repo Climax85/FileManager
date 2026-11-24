@@ -12,6 +12,7 @@ import { ApiRequestError } from "@/lib/api-client";
 export type UploadOptions = {
   ownerType?: string;
   ownerId?: string | null;
+  parentFolderId?: string;
   /**
    * Server-side category — must match a key in appsettings Files:Categories (e.g. Image, Document,
    * Archive). Can be a static string OR a function that picks the category per file based on its
@@ -144,6 +145,7 @@ export function useFileUpload(options: UploadOptions): UseFileUploadResult {
         sizeBytes: file.size,
         visibility: opts.visibility ?? DEFAULT_OPTIONS.visibility,
         category: resolvedCategory,
+        parentFolderId: opts.parentFolderId,
       };
 
       let presigned;
