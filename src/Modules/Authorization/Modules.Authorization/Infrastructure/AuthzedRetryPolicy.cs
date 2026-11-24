@@ -10,7 +10,8 @@ public sealed class AuthzedRetryPolicy(IOptions<SpiceDbOptions> options)
     public async Task<T> ExecuteAsync<T>(Func<CancellationToken, Task<T>> operation, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(operation);
-        for (int attempt = 0; ; attempt++)
+        int attempt = 0;
+        while (true)
         {
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeout.CancelAfter(TimeSpan.FromSeconds(_options.TimeoutSeconds));
@@ -25,6 +26,7 @@ public sealed class AuthzedRetryPolicy(IOptions<SpiceDbOptions> options)
             {
                 TimeSpan delay = TimeSpan.FromMilliseconds(100 * Math.Pow(2, attempt));
                 await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+                attempt++;
             }
         }
     }

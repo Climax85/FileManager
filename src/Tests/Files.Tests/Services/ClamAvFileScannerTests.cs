@@ -43,7 +43,7 @@ public sealed class ClamAvFileScannerTests
     public async Task ScanAsync_Should_ReturnScanFailed_WhenClamAvIsUnavailable()
     {
         int unusedPort;
-        var listener = new TcpListener(IPAddress.Loopback, 0);
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         unusedPort = ((IPEndPoint)listener.LocalEndpoint).Port;
         listener.Stop();
@@ -100,16 +100,20 @@ public sealed class ClamAvFileScannerTests
                 }
                 catch (OperationCanceledException)
                 {
+                    // Expected when disposal cancels the accept/read operation.
                 }
                 catch (SocketException)
                 {
+                    // Expected when disposal closes the listener socket.
                 }
                 catch (ObjectDisposedException)
                 {
+                    // Expected when disposal races socket shutdown.
                 }
             }
 
             _stopping.Dispose();
+            _listener.Dispose();
         }
 
         public int Start()

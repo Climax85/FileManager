@@ -2,6 +2,7 @@ namespace FSH.Modules.Authorization.Contracts;
 
 public enum RelationshipOperation
 {
+    None = 0,
     Touch = 1,
     Delete = 2,
 }
@@ -28,6 +29,7 @@ public sealed record RelationshipMutation
         Subject = subject;
         ExpiresAt = expiresAt;
     }
+    public RelationshipOperation Operation { get; }
     public AuthorizationObject Resource { get; }
     public AuthorizationRelation Relation { get; }
     public AuthorizationSubject Subject { get; }

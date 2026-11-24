@@ -81,13 +81,7 @@ public sealed class AuthzedAuthorizationClient(
                     request.Items[index],
                     item?.Permissionship == CheckPermissionResponse.Types.Permissionship.HasPermission,
                     Token(response.CheckedAt),
-                    pair.ResponseCase == CheckBulkPermissionsPair.ResponseOneofCase.Error
-                        ? AuthorizationFailure.Unavailable
-                        : item?.Permissionship == CheckPermissionResponse.Types.Permissionship.ConditionalPermission
-                            ? AuthorizationFailure.ConditionalPermission
-                            : item?.Permissionship == CheckPermissionResponse.Types.Permissionship.HasPermission
-                                ? null
-                                : AuthorizationFailure.NoPermission);
+                    BulkFailure(pair, item));
             }
 
             for (int index = 0; index < results.Length; index++)
@@ -123,12 +117,12 @@ public sealed class AuthzedAuthorizationClient(
     }
 
     public async ValueTask<AuthorizationResourcePage> LookupResourcesAsync(
-        LookupResourcesRequest request,
+        FSH.Modules.Authorization.Contracts.LookupResourcesRequest request,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
         if (request.Limit is < 1 or > 1000) throw new ArgumentOutOfRangeException(nameof(request));
-        var providerRequest = new LookupResourcesRequest
+        var providerRequest = new Authzed.Api.V1.LookupResourcesRequest
         {
             ResourceObjectType = AuthorizationSchema.Definition(request.ResourceType),
             Permission = AuthorizationSchema.Permission(request.Permission),
@@ -165,17 +159,7 @@ public sealed class AuthzedAuthorizationClient(
             ResourceType = AuthorizationSchema.Definition(query.ResourceType),
             OptionalResourceId = query.ResourceId ?? string.Empty,
             OptionalRelation = query.Relation is null ? string.Empty : AuthorizationSchema.Relation(query.Relation.Value),
-            OptionalSubjectFilter = query.Subject is null ? null : new SubjectFilter
-            {
-                SubjectType = query.Subject.Object.Definition,
-                OptionalSubjectId = query.Subject.Object.ObjectId,
-                OptionalRelation = query.Subject.OptionalRelation is null
-                    ? null
-                    : new SubjectFilter.Types.RelationFilter
-                    {
-                        Relation = AuthorizationSchema.Relation(query.Subject.OptionalRelation.Value),
-                    },
-            },
+            OptionalSubjectFilter = SubjectFilter(query.Subject),
         };
         var providerRequest = new ReadRelationshipsRequest
         {
@@ -211,10 +195,44 @@ public sealed class AuthzedAuthorizationClient(
         return new AuthorizationRelationshipPage(relationships, Cursor(cursor), Token(readAt));
     }
 
+    private static AuthorizationFailure? BulkFailure(
+        CheckBulkPermissionsPair pair,
+        CheckBulkPermissionsResponseItem? item)
+    {
+        if (pair.ResponseCase == CheckBulkPermissionsPair.ResponseOneofCase.Error)
+        {
+            return AuthorizationFailure.Unavailable;
+        }
+
+        return item?.Permissionship switch
+        {
+            CheckPermissionResponse.Types.Permissionship.HasPermission => null,
+            CheckPermissionResponse.Types.Permissionship.ConditionalPermission => AuthorizationFailure.ConditionalPermission,
+            _ => AuthorizationFailure.NoPermission,
+        };
+    }
+
+    private static SubjectFilter? SubjectFilter(AuthorizationSubject? subject)
+    {
+        if (subject is null) return null;
+
+        return new SubjectFilter
+        {
+            SubjectType = subject.Object.Definition,
+            OptionalSubjectId = subject.Object.ObjectId,
+            OptionalRelation = subject.OptionalRelation is null
+                ? null
+                : new SubjectFilter.Types.RelationFilter
+                {
+                    Relation = AuthorizationSchema.Relation(subject.OptionalRelation.Value),
+                },
+        };
+    }
+
     private static int FindRequestIndex(
         IReadOnlyList<PermissionCheck> requests,
         CheckBulkPermissionsRequestItem providerRequest,
-        IReadOnlyList<bool> assigned)
+        bool[] assigned)
     {
         for (int index = 0; index < requests.Count; index++)
         {

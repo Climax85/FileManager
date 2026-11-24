@@ -4,6 +4,7 @@ using FSH.Modules.Identity.Contracts.Events;
 
 namespace FSH.Modules.Authorization.IntegrationEventHandlers;
 
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Naming", "CA1711:Identifiers should not have incorrect suffix", Justification = "IntegrationEventHandler is the established messaging contract convention.")]
 public sealed class OrganizationAdminChangedIntegrationEventHandler(IOrganizationRootProvisioner provisioner)
     : IIntegrationEventHandler<OrganizationAdminChangedIntegrationEvent>
 {

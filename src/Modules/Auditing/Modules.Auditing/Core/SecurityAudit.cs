@@ -56,7 +56,7 @@ public sealed class SecurityAudit : ISecurityAudit
 
     public ValueTask FileDownloadIssuedAsync(string userId, Guid fileAssetId, DateTimeOffset expiresAtUtc, CancellationToken ct = default)
         => _audit.WriteSecurityAsync(SecurityAction.FileDownloadIssued,
-            subjectId: userId, authMethod: "FileAccessPolicy", reasonCode: "",
+            subjectId: userId, clientId: "files", authMethod: "FileAccessPolicy", reasonCode: "",
             claims: new Dictionary<string, object?>
             {
                 ["fileAssetId"] = fileAssetId,
@@ -66,7 +66,7 @@ public sealed class SecurityAudit : ISecurityAudit
 
     public ValueTask FileDownloadDeniedAsync(string userId, Guid fileAssetId, string reason, CancellationToken ct = default)
         => _audit.WriteSecurityAsync(SecurityAction.FileDownloadDenied,
-            subjectId: userId, authMethod: "FileAccessPolicy", reasonCode: reason,
+            subjectId: userId, clientId: "files", authMethod: "FileAccessPolicy", reasonCode: reason,
             claims: new Dictionary<string, object?> { ["fileAssetId"] = fileAssetId },
             severity: AuditSeverity.Warning, source: "Files", ct);
 }

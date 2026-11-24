@@ -64,8 +64,7 @@ public sealed class MiddlewareWebApplicationFactory : WebApplicationFactory<Prog
         .WithAutoRemove(true)
         .WithCleanUp(true)
         .Build();
-    private readonly IContainer _spiceDb = new ContainerBuilder()
-        .WithImage("authzed/spicedb:v1.57.1")
+    private readonly IContainer _spiceDb = new ContainerBuilder("authzed/spicedb:v1.57.1")
         .WithPortBinding(50051, true)
         .WithCommand("serve-testing", "--grpc-preshared-key", SpiceDbKey)
         .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(50051))
