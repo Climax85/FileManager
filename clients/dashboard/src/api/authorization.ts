@@ -7,17 +7,54 @@ export type OrganizationFolder = {
   isRoot: boolean;
   createdAt: string;
   authorizationToken: string;
+  parentId?: string | null;
+  canEdit: boolean;
 };
+
+export type FolderChildrenPage = {
+  items: OrganizationFolder[];
+  nextCursor: string | null;
+  authorizationToken: string;
+};
+
+function authorizationHeaders(token?: string) {
+  return token ? { "X-Authz-Token": token } : undefined;
+}
 
 export function getOrganizationRoot(authorizationToken?: string): Promise<OrganizationFolder> {
   return apiFetch<OrganizationFolder>("/api/v1/authorization/organization/root", {
-    headers: authorizationToken ? { "X-Authz-Token": authorizationToken } : undefined,
+    headers: authorizationHeaders(authorizationToken),
   });
 }
 
 export function openOrganizationFolder(folderId: string, authorizationToken?: string): Promise<OrganizationFolder> {
   return apiFetch<OrganizationFolder>(`/api/v1/authorization/folders/${encodeURIComponent(folderId)}`, {
-    headers: authorizationToken ? { "X-Authz-Token": authorizationToken } : undefined,
+    headers: authorizationHeaders(authorizationToken),
+  });
+}
+
+export function listFolderChildren(folderId: string, pageSize = 50, cursor?: string | null, authorizationToken?: string) {
+  const query = new URLSearchParams({ pageSize: String(pageSize) });
+  if (cursor) query.set("cursor", cursor);
+  return apiFetch<FolderChildrenPage>(
+    `/api/v1/authorization/folders/${encodeURIComponent(folderId)}/children?${query}`,
+    { headers: authorizationHeaders(authorizationToken) },
+  );
+}
+
+export function createFolder(input: { parentId: string; name: string; authorizationToken?: string }) {
+  return apiFetch<OrganizationFolder>("/api/v1/authorization/folders", {
+    method: "POST",
+    headers: authorizationHeaders(input.authorizationToken),
+    body: JSON.stringify(input),
+  });
+}
+
+export function renameFolder(input: { folderId: string; name: string; authorizationToken?: string }) {
+  return apiFetch<OrganizationFolder>(`/api/v1/authorization/folders/${encodeURIComponent(input.folderId)}`, {
+    method: "PATCH",
+    headers: authorizationHeaders(input.authorizationToken),
+    body: JSON.stringify({ name: input.name, authorizationToken: input.authorizationToken }),
   });
 }
 

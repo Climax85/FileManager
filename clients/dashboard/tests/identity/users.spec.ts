@@ -176,7 +176,7 @@ test.describe("identity/users/:userId — detail", () => {
     await mockProblemDetails(page, `**/api/v1/identity/users/${USER_ID}/roles`, 403, {
       title: "Forbidden",
       detail: "Multi-factor authentication is required to change organization administrators.",
-    });
+    }, { method: "POST" });
     await page.goto(`/identity/users/${USER_ID}`);
 
     await page.getByLabel("Toggle Admin").click();
@@ -190,7 +190,7 @@ test.describe("identity/users/:userId — detail", () => {
     await mockProblemDetails(page, `**/api/v1/identity/users/${USER_ID}/roles`, 400, {
       title: "Administrator change rejected",
       detail: "Organization must retain at least one administrator.",
-    });
+    }, { method: "POST" });
     await page.goto(`/identity/users/${USER_ID}`);
 
     await page.getByLabel("Toggle Admin").click();

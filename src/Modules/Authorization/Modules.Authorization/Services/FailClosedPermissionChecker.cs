@@ -56,6 +56,9 @@ public sealed class FailClosedPermissionChecker(
             result.Request.Resource, new OrganizationId(tenant), result.Request.Consistency?.AtLeastAsFreshToken, cancellationToken)
             .ConfigureAwait(false);
         Guid[] resourceIds = [.. lineage.Select(x => Guid.Parse(x.ObjectId))];
+        FolderId[] folderIds = [.. lineage
+            .Where(x => x.Type == AuthorizationObjectType.Folder)
+            .Select(x => new FolderId(Guid.Parse(x.ObjectId)))];
         bool hasUnconfirmedMutation = await db.ResourceGrants.AsNoTracking().AnyAsync(x =>
             resourceIds.Contains(x.ResourceId) &&
             (x.Status == ResourceGrantStatus.Pending || x.Status == ResourceGrantStatus.RevocationPending) &&
@@ -63,7 +66,7 @@ public sealed class FailClosedPermissionChecker(
              (x.SubjectType == AuthorizationObjectType.Organization && x.SubjectId == tenant)), cancellationToken)
             .ConfigureAwait(false);
         bool hasUnconfirmedFolderMove = await db.Folders.AsNoTracking()
-            .Where(folder => resourceIds.Contains(folder.Id.Value))
+            .Where(folder => folderIds.Contains(folder.Id))
             .Join(db.RelationshipSyncs.AsNoTracking(), folder => folder.SynchronizationId, sync => sync.OperationId,
                 (_, sync) => sync)
             .AnyAsync(sync => sync.Status != RelationshipSynchronizationStatus.Confirmed, cancellationToken)

@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { FolderOpen, FolderTree } from "lucide-react";
 import { Link } from "react-router-dom";
 import { getOrganizationRoot } from "@/api/authorization";
+import { SharingPanel } from "@/components/file-manager/sharing-panel";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export function OrganizationRootPage() {
@@ -33,20 +34,27 @@ export function OrganizationRootPage() {
         </Card>
       ) : null}
       {rootQuery.data ? (
-        <Card interactive className="max-w-xl">
-          <CardHeader>
-            <CardTitle>{rootQuery.data.name}</CardTitle>
-            <CardDescription>Organization root folder</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link
-              to={`/file-manager/folders/${rootQuery.data.id}`}
-              className="inline-flex items-center gap-2 rounded-md bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-[var(--color-primary-foreground)]"
-            >
-              <FolderOpen className="size-4" /> Open root folder
-            </Link>
-          </CardContent>
-        </Card>
+        <>
+          <Card interactive className="max-w-xl">
+            <CardHeader>
+              <CardTitle>{rootQuery.data.name}</CardTitle>
+              <CardDescription>Organization root folder</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Link
+                to={`/file-manager/folders/${rootQuery.data.id}`}
+                className="inline-flex items-center gap-2 rounded-md bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-[var(--color-primary-foreground)]"
+              >
+                <FolderOpen className="size-4" /> Open root folder
+              </Link>
+            </CardContent>
+          </Card>
+          <SharingPanel
+            resource={{ resourceType: "Folder", resourceId: rootQuery.data.id }}
+            organizationId={rootQuery.data.organizationId}
+            authorizationToken={rootQuery.data.authorizationToken}
+          />
+        </>
       ) : null}
     </div>
   );

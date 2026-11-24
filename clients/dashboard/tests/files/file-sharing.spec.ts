@@ -26,7 +26,7 @@ const ACTIVE_GRANT = {
 };
 
 test.beforeEach(async ({ page }) => {
-  await seedAuthedSession(page);
+  await seedAuthedSession(page, TEST_USER);
   await installShellMocks(page);
   await mockJsonResponse(page, "**/api/v1/authorization/organization/root", ROOT);
 });
