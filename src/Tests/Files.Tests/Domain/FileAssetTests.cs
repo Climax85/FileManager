@@ -1,6 +1,7 @@
 using FSH.Framework.Core.Exceptions;
 using FSH.Modules.Files.Contracts.v1.DTOs;
 using FSH.Modules.Files.Domain;
+using FSH.Modules.Authorization.Contracts;
 
 namespace Files.Tests.Domain;
 
@@ -107,5 +108,31 @@ public class FileAssetTests
         var f = NewPending();
         f.Restore();
         f.IsDeleted.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void BeginMove_ReplacesParent_AndRequiresConfirmationBeforeAccess()
+    {
+        Guid oldParent = Guid.CreateVersion7();
+        Guid newParent = Guid.CreateVersion7();
+        Guid operationId = Guid.CreateVersion7();
+        var file = FileAsset.CreatePending(
+            Guid.CreateVersion7(), "MyFiles", null, "move.pdf", "move.pdf", "application/pdf",
+            100, "key", Visibility.Private, "user", DateTimeOffset.UtcNow.AddMinutes(10),
+            oldParent, Guid.CreateVersion7());
+        file.MarkAuthorizationConfirmed("initial-token", DateTimeOffset.UtcNow);
+
+        file.BeginMove(newParent, operationId);
+
+        file.ParentFolderId.ShouldBe(newParent);
+        file.AuthorizationOperationId.ShouldBe(operationId);
+        file.AuthorizationSynchronizationStatus.ShouldBe(RelationshipSynchronizationStatus.Pending);
+        file.AuthorizationConfirmed.ShouldBeFalse();
+        file.AuthorizationToken.ShouldBeNull();
+        file.MarkAuthorizationFailed("outage");
+        file.AuthorizationSynchronizationError.ShouldBe("outage");
+        file.MarkAuthorizationConfirmed("move-token", DateTimeOffset.UtcNow);
+        file.AuthorizationConfirmed.ShouldBeTrue();
+        file.AuthorizationToken.ShouldBe("move-token");
     }
 }
