@@ -9,6 +9,7 @@ using FSH.Modules.Files.Domain;
 using FSH.Modules.Files.Features.v1.Internal;
 using FSH.Modules.Files.Services;
 using Mediator;
+using Microsoft.EntityFrameworkCore;
 
 namespace FSH.Modules.Files.Features.v1.ListMyFiles;
 
@@ -39,6 +40,6 @@ public sealed class ListMyFilesQueryHandler(
         IReadOnlyList<FileAsset> rows = await authorizedFiles.ReadAsync(
             candidates, userId, page, pageSize, cancellationToken).ConfigureAwait(false);
 
-        return rows.Select(FileAssetMapper.ToDto).ToList().AsReadOnly();
+        return rows.Select(file => FileAssetMapper.ToDto(file)).ToList().AsReadOnly();
     }
 }

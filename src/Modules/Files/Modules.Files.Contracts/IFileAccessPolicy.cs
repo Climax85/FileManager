@@ -30,7 +30,7 @@ public interface IFileAccessPolicy
     /// uploader check; the File Manager overrides this with resource editor permission.
     /// </summary>
     Task<bool> CanEditAsync(FileAccessContext context, string currentUserId, CancellationToken cancellationToken)
-        => Task.FromResult(string.Equals(context.CreatedByUserId, currentUserId, StringComparison.Ordinal));
+        => Task.FromResult(context is not null && string.Equals(context.CreatedByUserId, currentUserId, StringComparison.Ordinal));
 
     Task<bool> CanDeleteAsync(FileAccessContext context, string currentUserId, CancellationToken cancellationToken);
 
@@ -53,6 +53,7 @@ public interface IFileAccessPolicy
 /// <param name="OwnerId">OwnerId value, or null when the file isn't bound to an owner (e.g. MyFiles).</param>
 /// <param name="CreatedByUserId">User who uploaded the file.</param>
 /// <param name="Visibility">0 = Public, 1 = Private (matches the runtime enum int).</param>
+/// <param name="AuthorizationToken">Optional read-your-writes token for resource authorization.</param>
 public sealed record FileAccessContext(
     Guid FileAssetId,
     string OwnerType,
