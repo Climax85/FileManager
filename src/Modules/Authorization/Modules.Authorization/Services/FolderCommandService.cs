@@ -29,7 +29,7 @@ public sealed class FolderCommandService(
         OrganizationId organizationId = CurrentOrganization();
         FolderDescriptor parent = await hierarchy.FindAsync(parentId, organizationId, cancellationToken).ConfigureAwait(false)
             ?? throw new NotFoundException("folder parent not found");
-        AuthorizationToken authorizedAt = await authorization.RequireAsync(
+        await authorization.RequireAsync(
             parent.Id, AuthorizationPermission.Edit, requestedToken, cancellationToken).ConfigureAwait(false);
 
         Guid operationId = Guid.CreateVersion7();

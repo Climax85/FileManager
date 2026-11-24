@@ -52,6 +52,8 @@ public sealed class FolderConfiguration : IEntityTypeConfiguration<Folder>
             .HasFilter("\"IsRoot\" = TRUE")
             .HasDatabaseName("UX_Folders_OneRootPerOrganization");
     }
+}
+
 
 public sealed class RelationshipSynchronizationConfiguration : IEntityTypeConfiguration<RelationshipSynchronization>
 {

@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Routing;
 
 namespace FSH.Modules.Authorization.Features.v1.RenameFolder;
 
-public static class RenameFolderEndpoint
+public static class UpdateFolderEndpoint
 {
     internal static RouteHandlerBuilder MapRenameFolderEndpoint(this IEndpointRouteBuilder endpoints) =>
         endpoints.MapPatch("/folders/{id:guid}", async (
