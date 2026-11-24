@@ -44,6 +44,7 @@ export type FileAssetDto = {
   createdByUserId: string;
   deletedOnUtc?: string | null;
   deletedBy?: string | null;
+  parentFolderId?: string | null;
 };
 
 export type PresignedUploadResponse = {
@@ -66,6 +67,7 @@ export type RequestUploadUrlInput = {
   sizeBytes: number;
   visibility: VisibilityValue;
   category: string;
+  parentFolderId?: string;
 };
 
 export function requestUploadUrl(input: RequestUploadUrlInput): Promise<PresignedUploadResponse> {

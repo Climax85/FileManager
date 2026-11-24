@@ -3,6 +3,7 @@ using FSH.Framework.Core.Domain;
 using FSH.Framework.Core.Exceptions;
 using FSH.Modules.Files.Contracts.v1.DTOs;
 using FSH.Modules.Files.Domain.Events;
+using FSH.Modules.Authorization.Contracts;
 
 namespace FSH.Modules.Files.Domain;
 
@@ -25,6 +26,12 @@ public sealed class FileAsset : AggregateRoot<Guid>, ISoftDeletable
     public FileAssetStatus Status { get; private set; }
     public ScanStatus ScanStatus { get; private set; }
     public DateTimeOffset? UploadDeadline { get; private set; }
+    public Guid? ParentFolderId { get; private set; }
+    public Guid? AuthorizationOperationId { get; private set; }
+    public RelationshipSynchronizationStatus? AuthorizationSynchronizationStatus { get; private set; }
+    public string? AuthorizationToken { get; private set; }
+    public string? AuthorizationSynchronizationError { get; private set; }
+    public DateTimeOffset? AuthorizationConfirmedAtUtc { get; private set; }
     public string CreatedByUserId { get; private set; } = default!;
     public DateTime CreatedAtUtc { get; private set; }
     public DateTime? UpdatedAtUtc { get; private set; }
@@ -48,7 +55,9 @@ public sealed class FileAsset : AggregateRoot<Guid>, ISoftDeletable
         string storageKey,
         Visibility visibility,
         string createdByUserId,
-        DateTimeOffset uploadDeadline)
+        DateTimeOffset uploadDeadline,
+        Guid? parentFolderId = null,
+        Guid? authorizationOperationId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(ownerType);
         ArgumentException.ThrowIfNullOrWhiteSpace(originalFileName);
@@ -76,8 +85,40 @@ public sealed class FileAsset : AggregateRoot<Guid>, ISoftDeletable
             ScanStatus = ScanStatus.NotScanned,
             UploadDeadline = uploadDeadline,
             CreatedByUserId = createdByUserId,
-            CreatedAtUtc = DateTime.UtcNow
+            CreatedAtUtc = DateTime.UtcNow,
+            ParentFolderId = parentFolderId,
+            AuthorizationOperationId = authorizationOperationId,
+            AuthorizationSynchronizationStatus = authorizationOperationId is null
+                ? null
+                : RelationshipSynchronizationStatus.Pending
         };
+    }
+
+    public void MarkAuthorizationConfirmed(string authorizationToken, DateTimeOffset confirmedAt)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(authorizationToken);
+        if (AuthorizationOperationId is null)
+        {
+            throw new InvalidOperationException("This file has no authorization projection to confirm.");
+        }
+
+        AuthorizationToken = authorizationToken.Trim();
+        AuthorizationSynchronizationStatus = RelationshipSynchronizationStatus.Confirmed;
+        AuthorizationSynchronizationError = null;
+        AuthorizationConfirmedAtUtc = confirmedAt;
+    }
+
+    public void MarkAuthorizationFailed(string error)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(error);
+        if (AuthorizationOperationId is null)
+        {
+            throw new InvalidOperationException("This file has no authorization projection to retry.");
+        }
+
+        AuthorizationSynchronizationStatus = RelationshipSynchronizationStatus.Pending;
+        AuthorizationSynchronizationError = error.Length <= 2048 ? error : error[..2048];
+        AuthorizationConfirmedAtUtc = null;
     }
 
     public void MarkAvailable(long actualSize, ScanStatus scanResult)

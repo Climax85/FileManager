@@ -22,4 +22,5 @@ public sealed record FileAssetDto(
     string? PublicUrl,
     string CreatedByUserId = "",
     DateTimeOffset? DeletedOnUtc = null,
-    string? DeletedBy = null);
+    string? DeletedBy = null,
+    Guid? ParentFolderId = null);

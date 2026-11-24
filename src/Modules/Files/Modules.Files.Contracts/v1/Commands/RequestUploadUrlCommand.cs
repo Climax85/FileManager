@@ -10,4 +10,5 @@ public sealed record RequestUploadUrlCommand(
     string ContentType,
     long SizeBytes,
     Visibility Visibility,
-    string Category) : ICommand<PresignedUploadResponse>;
+    string Category,
+    Guid? ParentFolderId = null) : ICommand<PresignedUploadResponse>;
