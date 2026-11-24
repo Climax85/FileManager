@@ -7,7 +7,7 @@ public sealed record AuthorizationConsistency
 
     public AuthorizationToken? AtLeastAsFreshToken { get; }
 
-    public static AuthorizationConsistency MinimizeLatency() => new(null);
+    public static AuthorizationConsistency MinimizeLatency() => new((AuthorizationToken?)null);
 
     public static AuthorizationConsistency AtLeastAsFresh(AuthorizationToken token) => new(token);
 }
@@ -26,6 +26,7 @@ public sealed record PermissionCheckResult(
 
 public enum AuthorizationFailure
 {
+    None = 0,
     NoPermission = 1,
     ConditionalPermission = 2,
     Unavailable = 3,

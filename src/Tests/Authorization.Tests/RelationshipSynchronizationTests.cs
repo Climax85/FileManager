@@ -1,3 +1,5 @@
+using FSH.Modules.Authorization.Contracts;
+
 using FSH.Modules.Authorization.Domain;
 using Shouldly;
 using Xunit;

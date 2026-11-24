@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace FSH.Modules.Authorization.Contracts;
 
 public sealed record AuthorizationObject
@@ -26,19 +28,21 @@ public static class AuthorizationObjects
 
 public sealed record AuthorizationSubject
 {
-    public AuthorizationSubject(AuthorizationObject @object, AuthorizationRelation? optionalRelation = null)
+    public AuthorizationSubject(AuthorizationObject resource, AuthorizationRelation? optionalRelation = null)
     {
-        ArgumentNullException.ThrowIfNull(@object);
+        ArgumentNullException.ThrowIfNull(resource);
         if (optionalRelation is not null && optionalRelation is not AuthorizationRelation.Member)
         {
             throw new ArgumentException("Only member subject sets are valid sharing subjects.", nameof(optionalRelation));
         }
 
-        Object = @object;
+        Object = resource;
         OptionalRelation = optionalRelation;
     }
 
+    [SuppressMessage("Naming", "CA1720:Identifiers should not contain type names", Justification = "Object is the authorization graph domain term.")]
     public AuthorizationObject Object { get; }
+
     public AuthorizationRelation? OptionalRelation { get; }
 }
 

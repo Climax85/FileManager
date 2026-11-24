@@ -18,7 +18,7 @@ public sealed class SpiceDbSchemaTests(FshWebApplicationFactory factory)
         OrganizationId organization = new(TestConstants.RootTenantId);
         OrganizationRoot root = await provisioner.EnsureRootAsync(organization, CancellationToken.None);
         var users = await profiles.GetListAsync(CancellationToken.None);
-        UserId administrator = new(users.Single(user => user.Email == TestConstants.RootAdminEmail).Id);
+        UserId administrator = new(users.Single(user => user.Email == TestConstants.RootAdminEmail).Id!);
         UserId ordinary = new(Guid.NewGuid().ToString());
         AuthorizationConsistency fresh = AuthorizationConsistency.AtLeastAsFresh(root.AuthorizationToken!.Value);
 
@@ -57,7 +57,7 @@ public sealed class SpiceDbSchemaTests(FshWebApplicationFactory factory)
         var reader = scope.ServiceProvider.GetRequiredService<IRelationshipReader>();
         var profiles = scope.ServiceProvider.GetRequiredService<FSH.Modules.Identity.Contracts.Services.IUserProfileService>();
         OrganizationRoot root = await provisioner.EnsureRootAsync(new OrganizationId(TestConstants.RootTenantId), CancellationToken.None);
-        UserId administrator = new((await profiles.GetListAsync(CancellationToken.None)).Single(user => user.Email == TestConstants.RootAdminEmail).Id);
+        UserId administrator = new((await profiles.GetListAsync(CancellationToken.None)).Single(user => user.Email == TestConstants.RootAdminEmail).Id!);
         RelationshipMutation mutation = RelationshipMutation.Touch(
             AuthorizationObjects.For(root.Id),
             AuthorizationRelation.Manager,

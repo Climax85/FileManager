@@ -21,6 +21,7 @@ public readonly record struct GroupId
     public GroupId(Guid value) => Value = CanonicalIds.Guid(value);
     public Guid Value { get; }
     public override string ToString() => CanonicalIds.GuidString(Value);
+    public static GroupId New() => new(Guid.CreateVersion7());
 }
 
 public readonly record struct OrganizationalUnitId
@@ -28,6 +29,7 @@ public readonly record struct OrganizationalUnitId
     public OrganizationalUnitId(Guid value) => Value = CanonicalIds.Guid(value);
     public Guid Value { get; }
     public override string ToString() => CanonicalIds.GuidString(Value);
+    public static OrganizationalUnitId New() => new(Guid.CreateVersion7());
 }
 
 public readonly record struct FolderId
