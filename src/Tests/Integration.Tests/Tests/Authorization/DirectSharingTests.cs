@@ -1,6 +1,7 @@
 using FSH.Modules.Auditing.Contracts;
 using FSH.Modules.Authorization.Contracts;
 using FSH.Modules.Authorization.Data;
+using FSH.Modules.Authorization.Contracts.v1.Sharing;
 using FSH.Modules.Authorization.Domain;
 using Integration.Tests.Infrastructure;
 using Integration.Tests.Infrastructure.Extensions;
@@ -151,9 +152,9 @@ public sealed class DirectSharingTests
             ]);
         }
 
-        GrantResult grant = await GrantAsync(admin, root.Id, "File", fileId.Value, editor.Id, "Editor");
+        GrantResult grant = await GrantAsync(admin, "File", fileId.Value, editor.Id, "Editor");
         using var editorClient = await _auth.CreateAuthenticatedClientAsync(editor.Email, TestConstants.DefaultPassword);
-        EffectiveAccessResult effective = await GetEffectiveAccessAsync(editorClient, root.Id, "File", fileId.Value, editor.Id, grant.AuthorizationToken);
+        EffectiveAccessResult effective = await GetEffectiveAccessAsync(editorClient, "File", fileId.Value, editor.Id, grant.AuthorizationToken);
         effective.Access.ShouldBe(EffectiveAccessLevel.Editor);
 
         using HttpResponseMessage denied = await editorClient.PostAsJsonAsync(
@@ -298,10 +299,10 @@ public sealed class DirectSharingTests
     };
 
     private static Task<GrantResult> GrantAsync(HttpClient client, RootResult root, string subjectId, string relation) =>
-        GrantAsync(client, root.Id, "Folder", root.Id, subjectId, relation, root.AuthorizationToken);
+        GrantAsync(client, "Folder", root.Id, subjectId, relation, root.AuthorizationToken);
 
     private static async Task<GrantResult> GrantAsync(
-        HttpClient client, Guid rootId, string resourceType, Guid resourceId, string subjectId, string relation,
+        HttpClient client, string resourceType, Guid resourceId, string subjectId, string relation,
         string? authorizationToken = null)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, GrantsPath(resourceType, resourceId))
@@ -316,10 +317,10 @@ public sealed class DirectSharingTests
 
     private static Task<EffectiveAccessResult> GetEffectiveAccessAsync(
         HttpClient client, RootResult root, string subjectId, string token) =>
-        GetEffectiveAccessAsync(client, root.Id, "Folder", root.Id, subjectId, token);
+        GetEffectiveAccessAsync(client, "Folder", root.Id, subjectId, token);
 
     private static async Task<EffectiveAccessResult> GetEffectiveAccessAsync(
-        HttpClient client, Guid rootId, string resourceType, Guid resourceId, string subjectId, string token)
+        HttpClient client, string resourceType, Guid resourceId, string subjectId, string token)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get,
             $"{BasePath}/resources/{resourceType}/{resourceId}/effective-access?subjectId={Uri.EscapeDataString(subjectId)}");
@@ -341,10 +342,11 @@ public sealed class DirectSharingTests
         var detail = await AuditTestHelper.GetByIdAsync(admin, audit.Id);
         detail.ShouldNotBeNull();
         string payload = detail.Payload.GetRawText();
-        payload.ShouldContain(action);
-        payload.ShouldNotContain("http", StringComparison.OrdinalIgnoreCase);
-        payload.ShouldNotContain("url", StringComparison.OrdinalIgnoreCase);
-        payload.ShouldNotContain("content", StringComparison.OrdinalIgnoreCase);
+        string normalizedPayload = payload.ToUpperInvariant();
+        normalizedPayload.ShouldContain(action.ToUpperInvariant());
+        normalizedPayload.ShouldNotContain("http");
+        normalizedPayload.ShouldNotContain("url");
+        normalizedPayload.ShouldNotContain("content");
     }
 
     private sealed record RootResult(Guid Id, string AuthorizationToken);

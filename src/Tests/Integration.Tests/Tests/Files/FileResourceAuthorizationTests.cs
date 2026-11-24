@@ -45,7 +45,7 @@ public sealed class FileResourceAuthorizationTests
         {
             await AuthorizationTestData.UseRootTenantAsync(scope);
             var db = scope.ServiceProvider.GetRequiredService<FilesDbContext>();
-            db.FileAssets.Count(x => x.Id == fileId).ShouldBe(1);
+            (await db.FileAssets.CountAsync(x => x.Id == fileId)).ShouldBe(1);
             FileAsset pending = await db.FileAssets.SingleAsync(x => x.Id == fileId);
             pending.ParentFolderId.ShouldBe(root.Id.Value);
             pending.AuthorizationSynchronizationStatus.ShouldBe(RelationshipSynchronizationStatus.Confirmed);

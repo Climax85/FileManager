@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { ErrorBand } from "@/components/list";
 import { Switch } from "@/components/ui/switch";
 import {
+  Visibility,
   FileAssetStatus,
   FileScanStatus,
   changeFileVisibility,

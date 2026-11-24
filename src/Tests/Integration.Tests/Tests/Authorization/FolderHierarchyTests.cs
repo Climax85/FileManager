@@ -29,33 +29,34 @@ public sealed class FolderHierarchyTests
         FolderResult level4 = await CreateFolderAsync(admin, level3.Id, "Level 4", level3.AuthorizationToken);
 
         SeededUser viewer = await IdentityUserSeeder.CreateLoginableUserAsync(_factory, admin, "folder-viewer");
-        RelationshipConfirmation viewerGrant = await GrantAsync(new UserId(viewer.UserId), root.Id, AuthorizationRelation.Viewer);
+        RelationshipConfirmation viewerGrant = await GrantAsync(new UserId(viewer.UserId), new FolderId(root.Id), AuthorizationRelation.Viewer);
         using var viewerClient = await _auth.CreateAuthenticatedClientAsync(viewer.Email, viewer.Password);
-        using var viewerGet = await GetFolderAsync(viewerClient, level4.Id, viewerGrant.WrittenAt.Value);
+        using var viewerGet = await GetFolderAsync(viewerClient, level4.Id, viewerGrant.WrittenAt);
         viewerGet.StatusCode.ShouldBe(HttpStatusCode.OK);
         (await viewerClient.PostAsJsonAsync("/api/v1/authorization/folders", new
         {
             parentId = level4.Id,
             name = "Viewer child",
-            authorizationToken = viewerGrant.WrittenAt.Value.Value,
+            authorizationToken = viewerGrant.WrittenAt.Value,
         })).StatusCode.ShouldBe(HttpStatusCode.NotFound);
         (await viewerClient.PatchAsJsonAsync($"/api/v1/authorization/folders/{level4.Id}", new
         {
             name = "Viewer rename",
-            authorizationToken = viewerGrant.WrittenAt.Value.Value,
+            authorizationToken = viewerGrant.WrittenAt.Value,
         })).StatusCode.ShouldBe(HttpStatusCode.NotFound);
 
         SeededUser editor = await IdentityUserSeeder.CreateLoginableUserAsync(_factory, admin, "folder-editor");
-        RelationshipConfirmation editorGrant = await GrantAsync(new UserId(editor.UserId), root.Id, AuthorizationRelation.Editor);
+        RelationshipConfirmation editorGrant = await GrantAsync(new UserId(editor.UserId), new FolderId(root.Id), AuthorizationRelation.Editor);
         using var editorClient = await _auth.CreateAuthenticatedClientAsync(editor.Email, editor.Password);
         FolderResult created = await CreateFolderAsync(
-            editorClient, level4.Id, "Editor child", editorGrant.WrittenAt.Value.Value);
+            editorClient, level4.Id, "Editor child", editorGrant.WrittenAt.Value);
         using var renamed = await RenameFolderAsync(editorClient, created.Id, "Renamed by editor", created.AuthorizationToken);
         renamed.StatusCode.ShouldBe(HttpStatusCode.OK);
         FolderResult renamedFolder = (await renamed.Content.ReadFromJsonAsync<FolderResult>())!;
         renamedFolder.Name.ShouldBe("Renamed by editor");
         renamedFolder.ParentId.ShouldBe(level4.Id);
-        RelationshipConfirmation managerGrant = await GrantAsync(new UserId(manager.UserId), level4.Id, AuthorizationRelation.Manager);
+        SeededUser manager = await IdentityUserSeeder.CreateLoginableUserAsync(_factory, admin, "folder-manager");
+        RelationshipConfirmation managerGrant = await GrantAsync(new UserId(manager.UserId), new FolderId(level4.Id), AuthorizationRelation.Manager);
         using var scope = _factory.Services.CreateScope();
         await AuthorizationTestData.UseRootTenantAsync(scope);
         var checker = scope.ServiceProvider.GetRequiredService<IPermissionChecker>();
@@ -81,7 +82,7 @@ public sealed class FolderHierarchyTests
         }
         _ = await CreateFolderAsync(admin, expected.Select(x => x).First(), "Nested, not a direct child", token);
 
-        using var ordinary = await IdentityUserSeeder.CreateLoginableUserAsync(_factory, admin, "folder-list-denied");
+        var ordinary = await IdentityUserSeeder.CreateLoginableUserAsync(_factory, admin, "folder-list-denied");
         using var deniedClient = await _auth.CreateAuthenticatedClientAsync(ordinary.Email, ordinary.Password);
         using var denied = await ListChildrenAsync(deniedClient, parent.Id, 2, null, token);
         denied.StatusCode.ShouldBe(HttpStatusCode.NotFound);
