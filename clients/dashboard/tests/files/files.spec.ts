@@ -17,9 +17,12 @@ import { installShellMocks } from "../helpers/shell-mocks";
 
 // ─── Fixtures ────────────────────────────────────────────────────────────
 
+const ROOT_ID = "00000000-0000-0000-0000-0000000a1111";
+
 const FILE_REPORT = {
   id: "00000000-0000-0000-0000-0000000f1111",
   ownerType: "MyFiles",
+  parentFolderId: ROOT_ID,
   ownerId: null,
   originalFileName: "quarterly-report.pdf",
   contentType: "application/pdf",
@@ -67,6 +70,14 @@ const FILE_PUBLIC_OWNED_IMAGE = {
 test.beforeEach(async ({ page }) => {
   await seedAuthedSession(page, TEST_USER);
   await installShellMocks(page);
+  await mockJsonResponse(page, "**/api/v1/authorization/organization/root**", {
+    id: ROOT_ID,
+    organizationId: "root",
+    name: "Organization files",
+    isRoot: true,
+    createdAt: "2026-05-01T10:00:00Z",
+    authorizationToken: "zed-token",
+  });
   // The shared-file "uploaded by" attribution resolves uploader names via
   // GET /identity/users/{id}. Mock it so those rows don't 404-retry.
   await mockJsonResponse(page, "**/api/v1/identity/users/**", {
@@ -148,8 +159,58 @@ test.describe("files — My files / Shared tabs", () => {
 
     await expect(page.getByRole("heading", { name: /nothing shared yet/i })).toBeVisible();
     await expect(
-      page.getByText(/when a teammate flips one of their files to public/i),
+      page.getByText(/direct or inherited resource grants/i),
     ).toBeVisible();
+  });
+});
+
+
+test.describe("files — organization upload", () => {
+  test("uploads into the root, finalizes, and displays the authorized metadata", async ({ page }) => {
+    let finalized = false;
+    let requestedParent: string | undefined;
+    await page.route("**/api/v1/files/mine**", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(finalized ? [FILE_REPORT] : []),
+      });
+    });
+    await page.route("**/api/v1/files/upload-url", async (route) => {
+      requestedParent = route.request().postDataJSON().parentFolderId;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          fileAssetId: FILE_REPORT.id,
+          uploadUrl: "https://minio.example.test/upload/organization-document",
+          requiredHeaders: { "Content-Type": "application/pdf" },
+          expiresAt: "2026-05-12T10:15:00Z",
+        }),
+      });
+    });
+    await page.route("https://minio.example.test/upload/organization-document", async (route) => {
+      await route.fulfill({ status: 200, body: "" });
+    });
+    await page.route(`**/api/v1/files/${FILE_REPORT.id}/finalize`, async (route) => {
+      finalized = true;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(FILE_REPORT),
+      });
+    });
+
+    await page.goto("/files");
+    await page.locator('input[type="file"]').setInputFiles({
+      name: "quarterly-report.pdf",
+      mimeType: "application/pdf",
+      buffer: Buffer.from("%PDF-1.7 test"),
+    });
+
+    await expect(page.getByText("quarterly-report.pdf").last()).toBeVisible();
+    expect(requestedParent).toBe(ROOT_ID);
+    expect(finalized).toBe(true);
   });
 });
 

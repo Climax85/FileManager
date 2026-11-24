@@ -410,16 +410,16 @@ function MetadataPanel({
   ];
 
   const isPublic = file.visibility === Visibility.Public;
+  const isFileManager = file.ownerType === "MyFiles" || file.ownerType === "User";
 
   return (
     <div className="space-y-3 rounded-xl border border-border bg-[var(--color-muted)] p-4">
-      {/* Visibility row — switch when the caller is the uploader, static label
-          otherwise. Public state gets a small "visible to the tenant" hint so
-          the consequence is clear before flipping. */}
+      {/* Specialized owner types retain their legacy visibility controls. File Manager
+          access is always resource-grant based and never changed by this metadata bit. */}
       <div className="flex items-start justify-between gap-3 border-b border-[oklch(from_var(--color-border)_l_c_h_/_0.5)] pb-3">
         <div>
           <dt className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
-            Visibility
+            {isFileManager ? "Access" : "Visibility"}
           </dt>
           <dd
             className={cn(
@@ -427,15 +427,17 @@ function MetadataPanel({
               isPublic ? "text-[var(--color-primary)]" : "text-[var(--color-foreground)]",
             )}
           >
-            {isPublic ? "Public" : "Private"}
+            {isFileManager ? "Resource authorized" : isPublic ? "Public" : "Private"}
           </dd>
           <p className="mt-0.5 text-[11px] text-[var(--color-muted-foreground)]">
-            {isPublic
-              ? "Everyone in your tenant can find this file under Shared."
-              : "Only you can preview or download this file."}
+            {isFileManager
+              ? "Only direct or inherited resource grants permit preview and download."
+              : isPublic
+                ? "Everyone in your tenant can find this file under Shared."
+                : "Only you can preview or download this file."}
           </p>
         </div>
-        {isUploader ? (
+        {!isFileManager && isUploader ? (
           <Switch
             checked={isPublic}
             onCheckedChange={(checked) =>
@@ -444,11 +446,11 @@ function MetadataPanel({
             disabled={visibilityPending}
             aria-label="Toggle public visibility"
           />
-        ) : (
+        ) : !isFileManager ? (
           <span className="text-[10.5px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
             Read-only
           </span>
-        )}
+        ) : null}
       </div>
 
       <dl className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">

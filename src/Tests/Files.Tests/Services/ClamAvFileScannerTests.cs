@@ -128,6 +128,13 @@ public sealed class ClamAvFileScannerTests
         {
             using var client = await _listener.AcceptTcpClientAsync(_stopping.Token);
             await using var stream = client.GetStream();
+            byte[] command = new byte[1];
+            do
+            {
+                await stream.ReadExactlyAsync(command, _stopping.Token);
+            }
+            while (command[0] != 0);
+
             byte[] header = new byte[4];
             while (true)
             {

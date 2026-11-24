@@ -2,8 +2,8 @@ namespace FSH.Modules.Files.Contracts;
 
 /// <summary>
 /// Per-OwnerType authorization for FileAssets. Each owning module (Catalog, Tickets, ...) registers
-/// its own implementation via <c>services.AddFileAccessPolicy&lt;TPolicy&gt;()</c>. The Files module
-/// ships a uploader-only default for the built-in <c>MyFiles</c> and <c>User</c> owner types.
+/// its own implementation via <c>services.AddFileAccessPolicy&lt;TPolicy&gt;()</c>. Built-in File Manager
+/// owner types use active organization membership and provider-neutral resource authorization.
 /// Tenant scoping is enforced by the framework's BaseDbContext (schema-per-tenant) and is NOT
 /// delegated to policies. Policies receive a primitive <c>currentUserId</c> rather than a
 /// <c>ClaimsPrincipal</c> so the contract stays free of ASP.NET Core types — owning modules that
@@ -24,6 +24,13 @@ public interface IFileAccessPolicy
     /// </summary>
     Task<bool> CanDownloadAsync(FileAccessContext context, string currentUserId, CancellationToken cancellationToken)
         => CanReadAsync(context, currentUserId, cancellationToken);
+
+    /// <summary>
+    /// Whether the caller may finalize pending content. Specialized policies retain the historic
+    /// uploader check; the File Manager overrides this with resource editor permission.
+    /// </summary>
+    Task<bool> CanEditAsync(FileAccessContext context, string currentUserId, CancellationToken cancellationToken)
+        => Task.FromResult(context is not null && string.Equals(context.CreatedByUserId, currentUserId, StringComparison.Ordinal));
 
     Task<bool> CanDeleteAsync(FileAccessContext context, string currentUserId, CancellationToken cancellationToken);
 
@@ -46,9 +53,11 @@ public interface IFileAccessPolicy
 /// <param name="OwnerId">OwnerId value, or null when the file isn't bound to an owner (e.g. MyFiles).</param>
 /// <param name="CreatedByUserId">User who uploaded the file.</param>
 /// <param name="Visibility">0 = Public, 1 = Private (matches the runtime enum int).</param>
+/// <param name="AuthorizationToken">Optional read-your-writes token for resource authorization.</param>
 public sealed record FileAccessContext(
     Guid FileAssetId,
     string OwnerType,
     Guid? OwnerId,
     string CreatedByUserId,
-    int Visibility);
+    int Visibility,
+    string? AuthorizationToken = null);

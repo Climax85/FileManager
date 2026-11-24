@@ -23,6 +23,12 @@ public sealed class FileAssetConfiguration : IEntityTypeConfiguration<FileAsset>
         builder.Property(x => x.Status).HasConversion<int>().IsRequired();
         builder.Property(x => x.ScanStatus).HasConversion<int>().IsRequired();
         builder.Property(x => x.UploadDeadline);
+        builder.Property(x => x.ParentFolderId);
+        builder.Property(x => x.AuthorizationOperationId);
+        builder.Property(x => x.AuthorizationSynchronizationStatus).HasConversion<string>().HasMaxLength(16);
+        builder.Property(x => x.AuthorizationToken).HasMaxLength(1024);
+        builder.Property(x => x.AuthorizationSynchronizationError).HasMaxLength(2048);
+        builder.Property(x => x.AuthorizationConfirmedAtUtc);
         builder.Property(x => x.CreatedByUserId).IsRequired().HasMaxLength(64);
         builder.Property(x => x.CreatedAtUtc).IsRequired();
         builder.Property(x => x.UpdatedAtUtc);
@@ -32,6 +38,12 @@ public sealed class FileAssetConfiguration : IEntityTypeConfiguration<FileAsset>
 
         // Schema-per-tenant (BaseDbContext) makes per-tenant narrowing implicit, so only an
         // Owner index is needed (not the row-level (TenantId, OwnerType, OwnerId)).
+        builder.HasIndex(x => x.ParentFolderId)
+            .HasDatabaseName("IX_FileAsset_ParentFolder");
+        builder.HasIndex(x => x.AuthorizationOperationId)
+            .IsUnique()
+            .HasFilter("\"AuthorizationOperationId\" IS NOT NULL")
+            .HasDatabaseName("UX_FileAsset_AuthorizationOperation");
         builder.HasIndex(x => new { x.OwnerType, x.OwnerId })
             .HasDatabaseName("IX_FileAsset_Owner");
         builder.HasIndex(x => x.Status)

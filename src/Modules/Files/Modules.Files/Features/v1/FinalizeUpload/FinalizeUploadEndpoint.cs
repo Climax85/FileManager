@@ -1,4 +1,6 @@
 using FSH.Modules.Files.Contracts.v1.Commands;
+using FSH.Framework.Shared.Identity.Authorization;
+using FSH.Modules.Files.Contracts.Authorization;
 using Mediator;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -14,5 +16,5 @@ public static class FinalizeUploadEndpoint
                     Results.Ok(await mediator.Send(new FinalizeUploadCommand(id), cancellationToken)))
             .WithName("FinalizeFileUpload")
             .WithSummary("Finalize a file upload after the browser PUT completes")
-            .RequireAuthorization();
+            .RequirePermission(FilesPermissions.Upload);
 }
