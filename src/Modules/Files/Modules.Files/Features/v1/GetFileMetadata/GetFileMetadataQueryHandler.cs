@@ -33,7 +33,7 @@ public sealed class GetFileMetadataQueryHandler(
         var policy = policies.Resolve(f.OwnerType)
             ?? throw new NotFoundException("file not found"); // don't leak existence on missing policy
 
-        var ctx = new FileAccessContext(f.Id, f.OwnerType, f.OwnerId, f.CreatedByUserId, (int)f.Visibility, f.AuthorizationToken);
+        var ctx = new FileAccessContext(f.Id, f.OwnerType, f.OwnerId, f.CreatedByUserId, (int)f.Visibility, f.AuthorizationToken, f.AuthorizationConfirmed);
         if (!await policy.CanReadAsync(ctx, userId, cancellationToken).ConfigureAwait(false))
         {
             throw new NotFoundException("file not found");

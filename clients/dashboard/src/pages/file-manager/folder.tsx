@@ -9,6 +9,7 @@ import {
   openOrganizationFolder,
   renameFolder,
 } from "@/api/authorization";
+import { MoveResourcePanel } from "@/components/file-manager/move-resource-panel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -117,6 +118,13 @@ export function OrganizationFolderPage() {
               ) : null}
             </CardContent>
           </Card>
+          {!folderQuery.data.isRoot ? (
+            <MoveResourcePanel
+              resourceType="Folder"
+              resourceId={folderQuery.data.id}
+              authorizationToken={folderQuery.data.authorizationToken}
+            />
+          ) : null}
         </div>
       ) : null}
     </div>

@@ -26,7 +26,9 @@ public sealed class AuthorizedFileLister(
             return [];
         }
 
-        List<FileAsset> rows = await candidates.ToListAsync(cancellationToken).ConfigureAwait(false);
+        List<FileAsset> rows = await candidates
+            .Where(x => x.AuthorizationSynchronizationStatus == null || x.AuthorizationSynchronizationStatus == RelationshipSynchronizationStatus.Confirmed)
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
         string? latestToken = rows
             .OrderByDescending(x => x.AuthorizationConfirmedAtUtc)
             .Select(x => x.AuthorizationToken)

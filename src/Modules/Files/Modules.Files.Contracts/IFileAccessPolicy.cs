@@ -54,10 +54,12 @@ public interface IFileAccessPolicy
 /// <param name="CreatedByUserId">User who uploaded the file.</param>
 /// <param name="Visibility">0 = Public, 1 = Private (matches the runtime enum int).</param>
 /// <param name="AuthorizationToken">Optional read-your-writes token for resource authorization.</param>
+/// <param name="AuthorizationConfirmed">Whether the current authorization projection is confirmed; pending moves must fail closed.</param>
 public sealed record FileAccessContext(
     Guid FileAssetId,
     string OwnerType,
     Guid? OwnerId,
     string CreatedByUserId,
     int Visibility,
-    string? AuthorizationToken = null);
+    string? AuthorizationToken = null,
+    bool AuthorizationConfirmed = true);

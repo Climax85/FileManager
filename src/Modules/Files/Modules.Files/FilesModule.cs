@@ -9,6 +9,7 @@ using FSH.Modules.Files.Authorization;
 using FSH.Modules.Files.Contracts;
 using FSH.Modules.Files.Contracts.Authorization;
 using FSH.Modules.Authorization.Contracts;
+using FSH.Modules.Authorization.Contracts.v1.MoveResource;
 using FSH.Modules.Identity.Contracts.Services;
 using FSH.Modules.Files.Data;
 using FSH.Modules.Files.Features.v1.ChangeVisibility;
@@ -63,6 +64,7 @@ public sealed class FilesModule : IModule
         builder.Services.AddScoped<EfCoreOutboxStore<FilesDbContext>>();
         builder.Services.AddValidatorsFromAssembly(typeof(FilesModule).Assembly);
 
+        builder.Services.AddScoped<IResourceMoveHandler, FileResourceMoveHandler>();
         // Built-in File Manager files use only active membership + resource-graph permissions.
         // Catalog, Tickets, Chat and other owning modules keep their specialized policies.
         builder.Services.AddScoped<IFileAccessPolicy>(sp => new FileManagerFileAccessPolicy(

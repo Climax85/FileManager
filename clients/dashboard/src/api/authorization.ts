@@ -57,3 +57,28 @@ export function renameFolder(input: { folderId: string; name: string; authorizat
     body: JSON.stringify({ name: input.name, authorizationToken: input.authorizationToken }),
   });
 }
+
+export type MoveResourceResult = {
+  resourceType: "Folder" | "File";
+  resourceId: string;
+  parentFolderId: string;
+  operationId: string;
+  synchronizationStatus: "Pending" | "Confirmed";
+  authorizationToken: string;
+};
+
+export function moveResource(
+  resourceType: "Folder" | "File",
+  resourceId: string,
+  destinationFolderId: string,
+  authorizationToken: string,
+): Promise<MoveResourceResult> {
+  return apiFetch<MoveResourceResult>(
+    `/api/v1/authorization/resources/${resourceType}/${encodeURIComponent(resourceId)}/move`,
+    {
+      method: "POST",
+      headers: { "X-Authz-Token": authorizationToken },
+      body: JSON.stringify({ destinationFolderId }),
+    },
+  );
+}
