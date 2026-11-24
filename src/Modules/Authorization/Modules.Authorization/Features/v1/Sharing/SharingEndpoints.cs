@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Routing;
 
 namespace FSH.Modules.Authorization.Features.v1.Sharing;
 
-public static class SharingEndpoints
+public static class SharingEndpoint
 {
     internal static void MapSharingEndpoints(this IEndpointRouteBuilder endpoints)
     {

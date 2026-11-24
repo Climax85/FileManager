@@ -9,6 +9,7 @@ public sealed class ResourceGrantConfiguration : IEntityTypeConfiguration<Resour
 {
     public void Configure(EntityTypeBuilder<ResourceGrant> builder)
     {
+        ArgumentNullException.ThrowIfNull(builder);
         builder.ToTable("ResourceGrants");
         builder.HasKey(x => x.Id);
         builder.Property(x => x.OrganizationId)

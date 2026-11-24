@@ -24,7 +24,7 @@ public sealed class ResourceLineageReader(
                 Consistency: token is null
                     ? AuthorizationConsistency.MinimizeLatency()
                     : AuthorizationConsistency.AtLeastAsFresh(token.Value)), cancellationToken).ConfigureAwait(false);
-            AuthorizationRelationship? parent = parents.Relationships.FirstOrDefault();
+            AuthorizationRelationship? parent = parents.Relationships.Count > 0 ? parents.Relationships[0] : null;
             if (parent is null || !Guid.TryParse(parent.Subject.Object.ObjectId, out Guid parentId)) return lineage;
             folderId = new FolderId(parentId);
         }
@@ -35,11 +35,9 @@ public sealed class ResourceLineageReader(
 
         IReadOnlyList<FolderDescriptor> path = await folderHierarchy
             .GetPathAsync(folderId, organizationId, cancellationToken).ConfigureAwait(false);
-        foreach (FolderDescriptor folder in path)
-        {
-            if (lineage.Any(x => x.Type == AuthorizationObjectType.Folder && x.ObjectId == folder.Id.ToString())) continue;
-            lineage.Add(AuthorizationObjects.For(folder.Id));
-        }
+        lineage.AddRange(path
+            .Where(folder => lineage.All(x => x.Type != AuthorizationObjectType.Folder || x.ObjectId != folder.Id.ToString()))
+            .Select(folder => AuthorizationObjects.For(folder.Id)));
         return lineage;
     }
 }

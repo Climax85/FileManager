@@ -138,10 +138,13 @@ public sealed class ResourceSharingService(
         PermissionCheckResult view = edit.IsAllowed
             ? edit
             : await CheckAsync(subjectId, resource, AuthorizationPermission.View, consistency, cancellationToken).ConfigureAwait(false);
-        EffectiveAccessLevel access = manage.IsAllowed ? EffectiveAccessLevel.Manager
-            : edit.IsAllowed ? EffectiveAccessLevel.Editor
-            : view.IsAllowed ? EffectiveAccessLevel.Viewer
-            : EffectiveAccessLevel.None;
+        EffectiveAccessLevel access = (manage.IsAllowed, edit.IsAllowed, view.IsAllowed) switch
+        {
+            (true, _, _) => EffectiveAccessLevel.Manager,
+            (_, true, _) => EffectiveAccessLevel.Editor,
+            (_, _, true) => EffectiveAccessLevel.Viewer,
+            _ => EffectiveAccessLevel.None,
+        };
         if (access == EffectiveAccessLevel.None && view.Failure == AuthorizationFailure.Unavailable)
         {
             throw Unavailable("Effective access is temporarily unavailable.");
@@ -157,9 +160,15 @@ public sealed class ResourceSharingService(
         EffectiveAccessSourceResponse[] sources = [.. grants.Select(grant =>
         {
             bool sameResource = grant.ResourceType == resource.Type && grant.ResourceId == query.ResourceId;
-            EffectiveAccessSourceKind source = grant.SubjectType == AuthorizationObjectType.Organization
-                ? EffectiveAccessSourceKind.Organization
-                : sameResource ? EffectiveAccessSourceKind.Direct : EffectiveAccessSourceKind.Inherited;
+            EffectiveAccessSourceKind source;
+            if (grant.SubjectType == AuthorizationObjectType.Organization)
+            {
+                source = EffectiveAccessSourceKind.Organization;
+            }
+            else
+            {
+                source = sameResource ? EffectiveAccessSourceKind.Direct : EffectiveAccessSourceKind.Inherited;
+            }
             return new EffectiveAccessSourceResponse(
                 grant.Id, source, grant.ResourceType, grant.ResourceId, grant.Relation, grant.SubjectType, grant.SubjectId);
         })];

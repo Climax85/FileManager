@@ -64,8 +64,12 @@ public sealed class ResourceGrant
         AuthorizationObject resource,
         AuthorizationSubject subject,
         AuthorizationRelation relation,
-        DateTimeOffset createdAt) =>
-        new(id, operationId, organizationId, resource, subject, relation, createdAt);
+        DateTimeOffset createdAt)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+        ArgumentNullException.ThrowIfNull(subject);
+        return new ResourceGrant(id, operationId, organizationId, resource, subject, relation, createdAt);
+    }
 
     public AuthorizationObject Resource() => new(ResourceType, ResourceId.ToString("D"));
 
