@@ -110,7 +110,10 @@ public sealed class AuthorizationModule : IModule
             .RequireAuthorization();
         group.MapGetOrganizationRootEndpoint();
         group.MapGetFolderEndpoint();
-        group.MapSharingEndpoints();
+        group.MapCreateResourceGrantEndpoint();
+        group.MapRevokeResourceGrantEndpoint();
+        group.MapGetResourceGrantsEndpoint();
+        group.MapGetEffectiveAccessEndpoint();
         group.MapCreateFolderEndpoint();
         group.MapRenameFolderEndpoint();
         group.MapListFolderChildrenEndpoint();
