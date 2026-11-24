@@ -10,4 +10,6 @@ public sealed record OrganizationRootResponse(
     string Name,
     bool IsRoot,
     DateTimeOffset CreatedAt,
-    string AuthorizationToken);
+    string AuthorizationToken,
+    Guid? ParentId = null,
+    bool CanEdit = false);

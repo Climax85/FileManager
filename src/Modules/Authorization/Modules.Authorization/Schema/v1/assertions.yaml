@@ -29,6 +29,17 @@ relationships: |
   folder:acme-unit-shared#viewer_unit@organizational_unit:acme-parent
   folder:acme-org-shared#organization@organization:acme
   folder:acme-org-shared#viewer@organization:acme#member
+  folder:acme-depth-1#organization@organization:acme
+  folder:acme-depth-1#parent@folder:acme-root
+  folder:acme-depth-1#viewer@user:frank
+  folder:acme-depth-2#organization@organization:acme
+  folder:acme-depth-2#parent@folder:acme-depth-1
+  folder:acme-depth-2#editor@user:bob
+  folder:acme-depth-3#organization@organization:acme
+  folder:acme-depth-3#parent@folder:acme-depth-2
+  folder:acme-depth-3#manager@user:dan
+  folder:acme-depth-4#organization@organization:acme
+  folder:acme-depth-4#parent@folder:acme-depth-3
 
 assertions:
   assertTrue:
@@ -48,6 +59,12 @@ assertions:
     - "file:acme-file#download@user:alice"
     - "file:acme-file#edit@user:dan"
     - "folder:other-root#manage@user:eve"
+    - "folder:acme-depth-4#view@user:frank"
+    - "folder:acme-depth-4#view@user:bob"
+    - "folder:acme-depth-4#edit@user:bob"
+    - "folder:acme-depth-4#view@user:dan"
+    - "folder:acme-depth-4#edit@user:dan"
+    - "folder:acme-depth-4#manage@user:dan"
   assertFalse:
     - "folder:acme-root#view@user:frank"
     - "folder:acme-unit-shared#view@user:bob"
@@ -60,3 +77,7 @@ assertions:
     - "folder:other-root#manage@user:alice"
     - "folder:acme-root#view@user:eve"
     - "file:acme-file#manage@user:dan"
+    - "folder:acme-depth-4#edit@user:frank"
+    - "folder:acme-depth-4#manage@user:frank"
+    - "folder:acme-depth-4#manage@user:bob"
+    - "folder:acme-depth-4#view@user:eve"
