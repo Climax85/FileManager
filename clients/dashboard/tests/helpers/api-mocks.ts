@@ -47,8 +47,14 @@ export async function mockProblemDetails(
   urlGlob: string,
   status: number,
   problem: { title?: string; detail?: string; errors?: Record<string, string[]> },
+  options: { method?: string } = {},
 ) {
   await page.route(urlGlob, async (route: Route) => {
+    if (options.method && route.request().method() !== options.method) {
+      await route.fallback();
+      return;
+    }
+
     await route.fulfill({
       status,
       headers: { "Content-Type": "application/problem+json" },
@@ -79,6 +85,11 @@ export function captureRequest(page: Page, urlGlob: string) {
 
   void page.route(urlGlob, async (route: Route) => {
     const req = route.request();
+    if (req.method() === "GET") {
+      await route.fallback();
+      return;
+    }
+
     const raw = req.postData();
     const body: unknown = raw ? JSON.parse(raw) : undefined;
     const headers = req.headers();
