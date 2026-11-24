@@ -4,6 +4,7 @@ using FSH.Modules.Identity.Contracts.Services;
 using FSH.Modules.Identity.Contracts.v1.Groups.DeleteGroup;
 using FSH.Modules.Identity.Data;
 using Mediator;
+using FSH.Modules.Identity.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace FSH.Modules.Identity.Features.v1.Groups.DeleteGroup;
@@ -13,12 +14,18 @@ public sealed class DeleteGroupCommandHandler : ICommandHandler<DeleteGroupComma
     private readonly IdentityDbContext _dbContext;
     private readonly ICurrentUser _currentUser;
     private readonly IUserPermissionService _userPermissionService;
+    private readonly GroupAuthorizationProjection _authorizationProjection;
 
-    public DeleteGroupCommandHandler(IdentityDbContext dbContext, ICurrentUser currentUser, IUserPermissionService userPermissionService)
+    public DeleteGroupCommandHandler(
+        IdentityDbContext dbContext,
+        ICurrentUser currentUser,
+        IUserPermissionService userPermissionService,
+        GroupAuthorizationProjection authorizationProjection)
     {
         _dbContext = dbContext;
         _currentUser = currentUser;
         _userPermissionService = userPermissionService;
+        _authorizationProjection = authorizationProjection;
     }
 
     public async ValueTask<Unit> Handle(DeleteGroupCommand command, CancellationToken cancellationToken)
@@ -44,7 +51,7 @@ public sealed class DeleteGroupCommandHandler : ICommandHandler<DeleteGroupComma
         // Soft delete via domain method
         group.Delete(_currentUser.GetUserId().ToString());
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _authorizationProjection.SaveDeletedAsync(command.Id, memberIds, cancellationToken).ConfigureAwait(false);
 
         // A deleted group can no longer contribute its roles to members' effective
         // permission sets — flush each member's cached entry.

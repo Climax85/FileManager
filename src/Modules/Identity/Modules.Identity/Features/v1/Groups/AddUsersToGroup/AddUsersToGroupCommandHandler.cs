@@ -4,6 +4,7 @@ using FSH.Modules.Identity.Contracts.Services;
 using FSH.Modules.Identity.Contracts.v1.Groups.AddUsersToGroup;
 using FSH.Modules.Identity.Data;
 using FSH.Modules.Identity.Domain;
+using FSH.Modules.Identity.Services;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,12 +15,18 @@ public sealed class AddUsersToGroupCommandHandler : ICommandHandler<AddUsersToGr
     private readonly IdentityDbContext _dbContext;
     private readonly ICurrentUser _currentUser;
     private readonly IUserPermissionService _userPermissionService;
+    private readonly GroupAuthorizationProjection _authorizationProjection;
 
-    public AddUsersToGroupCommandHandler(IdentityDbContext dbContext, ICurrentUser currentUser, IUserPermissionService userPermissionService)
+    public AddUsersToGroupCommandHandler(
+        IdentityDbContext dbContext,
+        ICurrentUser currentUser,
+        IUserPermissionService userPermissionService,
+        GroupAuthorizationProjection authorizationProjection)
     {
         _dbContext = dbContext;
         _currentUser = currentUser;
         _userPermissionService = userPermissionService;
+        _authorizationProjection = authorizationProjection;
     }
 
     public async ValueTask<AddUsersToGroupResponse> Handle(AddUsersToGroupCommand command, CancellationToken cancellationToken)
@@ -63,7 +70,8 @@ public sealed class AddUsersToGroupCommandHandler : ICommandHandler<AddUsersToGr
             _dbContext.UserGroups.Add(UserGroup.Create(userId, command.GroupId, currentUserId));
         }
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _authorizationProjection.SaveMembershipChangesAsync(
+            command.GroupId, usersToAdd, [], cancellationToken).ConfigureAwait(false);
 
         // Joining a group can grant new roles (via GroupRoles) feeding JWT claims; invalidate
         // each newly-added user's cached permission set so their next request reflects it.

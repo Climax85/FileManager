@@ -3,6 +3,7 @@ using FSH.Modules.Identity.Contracts.Services;
 using FSH.Modules.Identity.Contracts.v1.Groups.RemoveUserFromGroup;
 using FSH.Modules.Identity.Data;
 using Mediator;
+using FSH.Modules.Identity.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace FSH.Modules.Identity.Features.v1.Groups.RemoveUserFromGroup;
@@ -11,11 +12,16 @@ public sealed class RemoveUserFromGroupCommandHandler : ICommandHandler<RemoveUs
 {
     private readonly IdentityDbContext _dbContext;
     private readonly IUserPermissionService _userPermissionService;
+    private readonly GroupAuthorizationProjection _authorizationProjection;
 
-    public RemoveUserFromGroupCommandHandler(IdentityDbContext dbContext, IUserPermissionService userPermissionService)
+    public RemoveUserFromGroupCommandHandler(
+        IdentityDbContext dbContext,
+        IUserPermissionService userPermissionService,
+        GroupAuthorizationProjection authorizationProjection)
     {
         _dbContext = dbContext;
         _userPermissionService = userPermissionService;
+        _authorizationProjection = authorizationProjection;
     }
 
     public async ValueTask<Unit> Handle(RemoveUserFromGroupCommand command, CancellationToken cancellationToken)
@@ -39,7 +45,8 @@ public sealed class RemoveUserFromGroupCommandHandler : ICommandHandler<RemoveUs
         }
 
         _dbContext.UserGroups.Remove(membership);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _authorizationProjection.SaveMembershipChangesAsync(
+            command.GroupId, [], [command.UserId], cancellationToken).ConfigureAwait(false);
 
         // Leaving a group may revoke roles the user only held through this group —
         // invalidate so the cached permission set is rebuilt on next request.
