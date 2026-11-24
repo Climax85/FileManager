@@ -55,7 +55,7 @@ internal sealed class FileManagerFileAccessPolicy(
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
-        if (string.IsNullOrWhiteSpace(currentUserId) || string.IsNullOrWhiteSpace(context.AuthorizationToken))
+        if (string.IsNullOrWhiteSpace(currentUserId) || !context.AuthorizationConfirmed || string.IsNullOrWhiteSpace(context.AuthorizationToken))
         {
             return false;
         }

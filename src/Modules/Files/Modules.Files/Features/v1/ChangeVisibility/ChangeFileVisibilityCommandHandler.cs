@@ -38,7 +38,7 @@ public sealed class ChangeFileVisibilityCommandHandler(
         var userId = currentUser.GetUserId().ToString();
         var policy = policies.Resolve(f.OwnerType)
             ?? throw new ForbiddenException("no policy");
-        var ctx = new FileAccessContext(f.Id, f.OwnerType, f.OwnerId, f.CreatedByUserId, (int)f.Visibility, f.AuthorizationToken);
+        var ctx = new FileAccessContext(f.Id, f.OwnerType, f.OwnerId, f.CreatedByUserId, (int)f.Visibility, f.AuthorizationToken, f.AuthorizationConfirmed);
         if (!await policy.CanChangeVisibilityAsync(ctx, userId, cancellationToken).ConfigureAwait(false))
         {
             throw new ForbiddenException("not allowed to change this file's visibility");

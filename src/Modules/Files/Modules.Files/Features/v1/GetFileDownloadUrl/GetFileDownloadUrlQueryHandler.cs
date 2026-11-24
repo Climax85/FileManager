@@ -48,7 +48,7 @@ public sealed class GetFileDownloadUrlQueryHandler(
             throw new NotFoundException("file not found");
         }
 
-        var ctx = new FileAccessContext(f.Id, f.OwnerType, f.OwnerId, f.CreatedByUserId, (int)f.Visibility, f.AuthorizationToken);
+        var ctx = new FileAccessContext(f.Id, f.OwnerType, f.OwnerId, f.CreatedByUserId, (int)f.Visibility, f.AuthorizationToken, f.AuthorizationConfirmed);
         if (!await policy.CanDownloadAsync(ctx, userId, cancellationToken).ConfigureAwait(false))
         {
             await AuditDenialAsync(userId, f.Id, "NotAuthorized", cancellationToken).ConfigureAwait(false);

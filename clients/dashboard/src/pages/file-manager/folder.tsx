@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { FolderOpen } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { openOrganizationFolder } from "@/api/authorization";
+import { MoveResourcePanel } from "@/components/file-manager/move-resource-panel";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export function OrganizationFolderPage() {
@@ -36,6 +37,13 @@ export function OrganizationFolderPage() {
             <CardHeader><CardTitle>Folder contents</CardTitle></CardHeader>
             <CardContent><CardDescription>This folder is open. Child folders and files will appear here.</CardDescription></CardContent>
           </Card>
+          {!folderQuery.data.isRoot ? (
+            <MoveResourcePanel
+              resourceType="Folder"
+              resourceId={folderQuery.data.id}
+              authorizationToken={folderQuery.data.authorizationToken}
+            />
+          ) : null}
         </div>
       ) : null}
     </div>

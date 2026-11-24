@@ -62,6 +62,16 @@ public sealed class FailClosedPermissionChecker(
             ((x.SubjectType == AuthorizationObjectType.User && x.SubjectId == result.Request.Subject.Value) ||
              (x.SubjectType == AuthorizationObjectType.Organization && x.SubjectId == tenant)), cancellationToken)
             .ConfigureAwait(false);
+        bool hasUnconfirmedFolderMove = await db.Folders.AsNoTracking()
+            .Where(folder => resourceIds.Contains(folder.Id.Value))
+            .Join(db.RelationshipSyncs.AsNoTracking(), folder => folder.SynchronizationId, sync => sync.OperationId,
+                (_, sync) => sync)
+            .AnyAsync(sync => sync.Status != RelationshipSynchronizationStatus.Confirmed, cancellationToken)
+            .ConfigureAwait(false);
+        if (hasUnconfirmedFolderMove)
+        {
+            return Deny(result);
+        }
         return hasUnconfirmedMutation ? Deny(result) : result;
     }
 

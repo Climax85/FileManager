@@ -50,7 +50,8 @@ public sealed class FinalizeUploadCommandHandler(
             asset.OwnerId,
             asset.CreatedByUserId,
             (int)asset.Visibility,
-            asset.AuthorizationToken);
+            asset.AuthorizationToken,
+            asset.AuthorizationConfirmed);
         if (!await policy.CanEditAsync(access, userId, cancellationToken).ConfigureAwait(false))
         {
             throw new ForbiddenException("editor access to the pending file is required");

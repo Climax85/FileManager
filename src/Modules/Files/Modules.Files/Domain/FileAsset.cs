@@ -29,6 +29,7 @@ public sealed class FileAsset : AggregateRoot<Guid>, ISoftDeletable
     public Guid? ParentFolderId { get; private set; }
     public Guid? AuthorizationOperationId { get; private set; }
     public RelationshipSynchronizationStatus? AuthorizationSynchronizationStatus { get; private set; }
+    public bool AuthorizationConfirmed => AuthorizationSynchronizationStatus is null or RelationshipSynchronizationStatus.Confirmed;
     public string? AuthorizationToken { get; private set; }
     public string? AuthorizationSynchronizationError { get; private set; }
     public DateTimeOffset? AuthorizationConfirmedAtUtc { get; private set; }
@@ -92,6 +93,25 @@ public sealed class FileAsset : AggregateRoot<Guid>, ISoftDeletable
                 ? null
                 : RelationshipSynchronizationStatus.Pending
         };
+    }
+
+    public void BeginMove(Guid destinationFolderId, Guid operationId)
+    {
+        if (destinationFolderId == Guid.Empty || operationId == Guid.Empty)
+        {
+            throw new ArgumentException("A destination folder and synchronization operation are required.");
+        }
+        if (ParentFolderId is null)
+        {
+            throw new InvalidOperationException("Only organization file manager resources can be moved.");
+        }
+
+        ParentFolderId = destinationFolderId;
+        AuthorizationOperationId = operationId;
+        AuthorizationSynchronizationStatus = RelationshipSynchronizationStatus.Pending;
+        AuthorizationToken = null;
+        AuthorizationSynchronizationError = null;
+        AuthorizationConfirmedAtUtc = null;
     }
 
     public void MarkAuthorizationConfirmed(string authorizationToken, DateTimeOffset confirmedAt)

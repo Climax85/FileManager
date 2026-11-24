@@ -10,8 +10,10 @@ using FSH.Modules.Authorization.Contracts;
 using FSH.Modules.Authorization.Data;
 using FSH.Modules.Authorization.Features.v1.CreateFolder;
 using FSH.Modules.Authorization.Features.v1.ListFolderChildren;
+using FSH.Modules.Authorization.Features.v1.MoveResource;
 using FSH.Modules.Authorization.Features.v1.RenameFolder;
 using FSH.Modules.Authorization.Features.v1.GetFolder;
+using FSH.Modules.Authorization.Contracts.v1.MoveResource;
 using FSH.Modules.Authorization.Features.v1.GetOrganizationRoot;
 using FSH.Modules.Authorization.Features.v1.Sharing;
 using FSH.Modules.Authorization.Infrastructure;
@@ -85,6 +87,8 @@ public sealed class AuthorizationModule : IModule
         builder.Services.AddScoped<IFolderHierarchy, FolderHierarchy>();
         builder.Services.AddScoped<IFolderAuthorization, FolderAuthorization>();
         builder.Services.AddScoped<FolderCommandService>();
+        builder.Services.AddScoped<IResourceMoveAuthorization, ResourceMoveAuthorizer>();
+        builder.Services.AddScoped<IResourceMoveHandler, FolderResourceMoveHandler>();
         builder.Services.AddHeroDbContext<AuthorizationDbContext>();
         builder.Services.AddEventingCore(builder.Configuration);
         builder.Services.AddEventingForDbContext<AuthorizationDbContext>();
@@ -116,6 +120,7 @@ public sealed class AuthorizationModule : IModule
         group.MapGetEffectiveAccessEndpoint();
         group.MapCreateFolderEndpoint();
         group.MapRenameFolderEndpoint();
+        group.MapMoveResourceEndpoint();
         group.MapListFolderChildrenEndpoint();
     }
 }

@@ -48,7 +48,8 @@ public enum SecurityAction
     FileDownloadIssued = 12,
     FileDownloadDenied = 13,
     ResourceGranted = 14,
-    ResourceRevoked = 15
+    ResourceRevoked = 15,
+    ResourceMoved = 16
 }
 
 /// <summary>
