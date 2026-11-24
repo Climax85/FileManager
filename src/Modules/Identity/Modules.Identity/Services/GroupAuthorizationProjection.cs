@@ -1,5 +1,6 @@
 using FSH.Framework.Core.Context;
 using FSH.Framework.Core.Exceptions;
+using FSH.Framework.Eventing.Abstractions;
 using FSH.Framework.Eventing.Outbox;
 using FSH.Modules.Authorization.Contracts;
 using FSH.Modules.Authorization.Contracts.Events;
@@ -7,11 +8,10 @@ using FSH.Modules.Identity.Data;
 using Microsoft.EntityFrameworkCore;
 
 namespace FSH.Modules.Identity.Services;
-
 public sealed class GroupAuthorizationProjection(
     IdentityDbContext db,
     ICurrentUser currentUser,
-    IRelationshipWriter relationshipWriter,
+    IEventBus eventBus,
     EfCoreOutboxStore<IdentityDbContext> outbox,
     TimeProvider timeProvider)
 {
@@ -78,11 +78,10 @@ public sealed class GroupAuthorizationProjection(
         await outbox.AddAsync(@event, cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
-        RelationshipConfirmation confirmation = await relationshipWriter.WriteAsync(
-            operationId, mutations, cancellationToken).ConfigureAwait(false);
+        await eventBus.PublishAsync(@event, cancellationToken).ConfigureAwait(false);
         OutboxMessage message = await db.OutboxMessages.SingleAsync(
             x => x.Id == operationId, cancellationToken).ConfigureAwait(false);
-        message.ProcessedOnUtc = confirmation.ConfirmedAt.UtcDateTime;
+        message.ProcessedOnUtc = timeProvider.GetUtcNow().UtcDateTime;
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 }

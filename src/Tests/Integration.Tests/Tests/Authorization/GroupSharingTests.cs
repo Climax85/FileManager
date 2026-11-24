@@ -34,7 +34,7 @@ public sealed class GroupSharingTests
 
         await AddMemberAsync(admin, groupId, member.Id);
 
-        EffectiveAccessResult after = await GetEffectiveAccessAsync(admin, resource, member.Id, grant.AuthorizationToken);
+        EffectiveAccessResult after = await GetEffectiveAccessAsync(admin, resource, member.Id, token: null);
         after.Access.ShouldBe(expectedAccess);
         EffectiveAccessSourceResult source = after.Sources.ShouldHaveSingleItem();
         source.Source.ShouldBe(EffectiveAccessSourceKind.Group);
@@ -54,18 +54,18 @@ public sealed class GroupSharingTests
         Guid groupId = await CreateGroupAsync(admin, "group-removal");
         GrantResult grant = await GrantAsync(admin, resource, groupId, "Viewer");
         await AddMemberAsync(admin, groupId, member.Id);
-        (await GetEffectiveAccessAsync(admin, resource, member.Id, grant.AuthorizationToken))
+        (await GetEffectiveAccessAsync(admin, resource, member.Id, token: null))
             .Access.ShouldBe(EffectiveAccessLevel.Viewer);
 
         using HttpResponseMessage removed = await admin.DeleteAsync(
             $"{TestConstants.IdentityBasePath}/groups/{groupId}/members/{member.Id}");
         removed.StatusCode.ShouldBe(HttpStatusCode.NoContent, await removed.Content.ReadAsStringAsync());
-        EffectiveAccessResult afterRemoval = await GetEffectiveAccessAsync(admin, resource, member.Id, grant.AuthorizationToken);
+        EffectiveAccessResult afterRemoval = await GetEffectiveAccessAsync(admin, resource, member.Id, token: null);
         afterRemoval.Access.ShouldBe(EffectiveAccessLevel.None);
         afterRemoval.Sources.ShouldBeEmpty();
 
         await AddMemberAsync(admin, groupId, member.Id);
-        (await GetEffectiveAccessAsync(admin, resource, member.Id, grant.AuthorizationToken))
+        (await GetEffectiveAccessAsync(admin, resource, member.Id, token: null))
             .Access.ShouldBe(EffectiveAccessLevel.Viewer);
 
         using HttpResponseMessage revoked = await admin.DeleteAsync($"{BasePath}/grants/{grant.Id}");
@@ -213,11 +213,11 @@ public sealed class GroupSharingTests
         HttpClient client,
         RootResult root,
         string subjectId,
-        string token)
+        string? token)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get,
             $"{BasePath}/resources/Folder/{root.Id}/effective-access?subjectId={Uri.EscapeDataString(subjectId)}");
-        request.Headers.Add("X-Authz-Token", token);
+        if (token is not null) request.Headers.Add("X-Authz-Token", token);
         using HttpResponseMessage response = await client.SendAsync(request);
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
         return await response.DeserializeAsync<EffectiveAccessResult>();
