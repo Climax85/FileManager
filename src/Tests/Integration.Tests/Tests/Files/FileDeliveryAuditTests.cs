@@ -114,8 +114,7 @@ public sealed class FileDeliveryAuditTests
         for (int attempt = 0; attempt < AuditTestHelper.DefaultPollAttempts; attempt++)
         {
             var rows = await AuditTestHelper.GetListAsync(client, $"/security?action={action}");
-            var match = rows.FirstOrDefault();
-            if (match is not null) return match;
+            if (rows.Count > 0) return rows[0];
             await Task.Delay(AuditTestHelper.PollInterval);
         }
 

@@ -9,6 +9,7 @@ public sealed class OrganizationProjectionConfiguration : IEntityTypeConfigurati
 {
     public void Configure(EntityTypeBuilder<OrganizationProjection> builder)
     {
+        ArgumentNullException.ThrowIfNull(builder);
         builder.ToTable("Organizations");
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Id)
@@ -22,6 +23,7 @@ public sealed class FolderConfiguration : IEntityTypeConfiguration<Folder>
 {
     public void Configure(EntityTypeBuilder<Folder> builder)
     {
+        ArgumentNullException.ThrowIfNull(builder);
         builder.ToTable("Folders", table => table.HasCheckConstraint(
             "CK_Folders_RootParent",
             "(\"IsRoot\" = TRUE AND \"ParentId\" IS NULL) OR (\"IsRoot\" = FALSE AND \"ParentId\" IS NOT NULL)"));
@@ -55,6 +57,7 @@ public sealed class RelationshipSynchronizationConfiguration : IEntityTypeConfig
 {
     public void Configure(EntityTypeBuilder<RelationshipSynchronization> builder)
     {
+        ArgumentNullException.ThrowIfNull(builder);
         builder.ToTable("RelationshipSynchronizations");
         builder.HasKey(x => x.OperationId);
         builder.Property(x => x.OrganizationId)

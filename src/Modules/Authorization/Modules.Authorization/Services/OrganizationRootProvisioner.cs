@@ -145,7 +145,7 @@ public sealed class OrganizationRootProvisioner(
         return RootMutations(root, adminIds);
     }
 
-    private static IReadOnlyCollection<RelationshipMutation> RootMutations(
+    private static List<RelationshipMutation> RootMutations(
         Folder root,
         IReadOnlyList<UserId> adminIds)
     {

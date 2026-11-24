@@ -14,6 +14,7 @@ using FSH.Modules.Authorization.Features.v1.GetOrganizationRoot;
 using FSH.Modules.Authorization.Infrastructure;
 using FSH.Modules.Authorization.Services;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;

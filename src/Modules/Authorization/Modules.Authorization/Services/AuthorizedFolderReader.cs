@@ -125,9 +125,15 @@ public sealed class AuthorizedFolderReader(
             .Select(x => x.ZedToken)
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
-        AuthorizationToken? token = !string.IsNullOrWhiteSpace(requestedToken)
-            ? new AuthorizationToken(requestedToken)
-            : persistedToken is not null ? new AuthorizationToken(persistedToken) : null;
+        AuthorizationToken? token = null;
+        if (!string.IsNullOrWhiteSpace(requestedToken))
+        {
+            token = new AuthorizationToken(requestedToken);
+        }
+        else if (persistedToken is not null)
+        {
+            token = new AuthorizationToken(persistedToken);
+        }
         if (token is null) throw new NotFoundException("folder not found");
 
         PermissionCheckResult result = await permissionChecker.CheckAsync(new PermissionCheck(

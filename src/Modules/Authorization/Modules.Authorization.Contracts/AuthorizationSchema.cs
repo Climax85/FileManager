@@ -1,7 +1,10 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace FSH.Modules.Authorization.Contracts;
 
 public enum AuthorizationObjectType
 {
+    None = 0,
     User = 1,
     Organization = 2,
     Group = 3,
@@ -12,6 +15,7 @@ public enum AuthorizationObjectType
 
 public enum AuthorizationRelation
 {
+    None = 0,
     Admin = 1,
     Member = 2,
     DirectMember = 3,
@@ -26,8 +30,10 @@ public enum AuthorizationRelation
     EditorUnit = 12,
 }
 
+[SuppressMessage("Naming", "CA1711:Identifiers should not have incorrect suffix", Justification = "Permission is the authorization domain term.")]
 public enum AuthorizationPermission
 {
+    None = 0,
     View = 1,
     Download = 2,
     Edit = 3,
