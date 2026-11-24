@@ -9,6 +9,7 @@
     <ProjectReference Include="..\..\..\BuildingBlocks\Eventing\Eventing.csproj" />
     <ProjectReference Include="..\Modules.Authorization.Contracts\Modules.Authorization.Contracts.csproj" />
     <ProjectReference Include="..\..\Identity\Modules.Identity.Contracts\Modules.Identity.Contracts.csproj" />
+    <ProjectReference Include="..\..\Auditing\Modules.Auditing.Contracts\Modules.Auditing.Contracts.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Authzed.Net" />

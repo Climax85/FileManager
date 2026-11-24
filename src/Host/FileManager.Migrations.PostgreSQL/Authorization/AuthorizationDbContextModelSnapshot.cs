@@ -21,6 +21,34 @@ partial class AuthorizationDbContextModelSnapshot : ModelSnapshot
             .HasAnnotation("Relational:MaxIdentifierLength", 63);
         NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+        modelBuilder.Entity("FSH.Modules.Authorization.Domain.ResourceGrant", b =>
+        {
+            b.Property<Guid>("Id").HasColumnType("uuid");
+            b.Property<DateTimeOffset?>("ConfirmedAt").HasColumnType("timestamp with time zone");
+            b.Property<DateTimeOffset>("CreatedAt").HasColumnType("timestamp with time zone");
+            b.Property<string>("LastError").HasMaxLength(2048).HasColumnType("character varying(2048)");
+            b.Property<Guid>("OperationId").HasColumnType("uuid");
+            b.Property<string>("OrganizationId").IsRequired().HasMaxLength(64).HasColumnType("character varying(64)");
+            b.Property<string>("Relation").IsRequired().HasMaxLength(32).HasColumnType("character varying(32)");
+            b.Property<Guid>("ResourceId").HasColumnType("uuid");
+            b.Property<string>("ResourceType").IsRequired().HasMaxLength(32).HasColumnType("character varying(32)");
+            b.Property<string>("Status").IsRequired().HasMaxLength(32).HasColumnType("character varying(32)");
+            b.Property<string>("SubjectId").IsRequired().HasMaxLength(128).HasColumnType("character varying(128)");
+            b.Property<string>("SubjectRelation").HasMaxLength(32).HasColumnType("character varying(32)");
+            b.Property<string>("SubjectType").IsRequired().HasMaxLength(32).HasColumnType("character varying(32)");
+            b.Property<string>("TenantId").IsRequired().HasColumnType("text");
+            b.Property<string>("ZedToken").HasMaxLength(1024).HasColumnType("character varying(1024)");
+            b.HasKey("Id");
+            b.HasIndex("TenantId", "ResourceType", "ResourceId", "Status");
+            b.HasIndex("TenantId", "OperationId").IsUnique();
+            b.HasIndex("TenantId", "ResourceType", "ResourceId", "SubjectType", "SubjectId", "SubjectRelation", "Relation")
+                .IsUnique()
+                .HasDatabaseName("UX_ResourceGrants_ActiveSubjectRelation")
+                .HasFilter("\"Status\" <> 'Revoked'");
+            b.ToTable("ResourceGrants", "authorization");
+            b.HasAnnotation("Finbuckle:MultiTenant", true);
+        });
+
         modelBuilder.Entity("FSH.Modules.Authorization.Domain.OrganizationProjection", b =>
         {
             b.Property<string>("Id").HasMaxLength(64).HasColumnType("character varying(64)");
